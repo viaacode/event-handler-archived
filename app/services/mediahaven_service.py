@@ -45,10 +45,12 @@ class MediahavenService:
             )
 
             if r.status_code != 201:
-                raise ConnectionError(f"Failed to get a token. Status: {r.status_code}")
+                raise RequestException(
+                    f"Failed to get a token. Status: {r.status_code}"
+                )
             token_info = r.json()
-        except ConnectionError as e:
-            raise
+        except RequestException as e:
+            raise e
         return token_info
 
     @__authenticate

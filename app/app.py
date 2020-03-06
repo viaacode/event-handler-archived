@@ -1,87 +1,110 @@
 from datetime import datetime
 from io import BytesIO
-from typing import Tuple
+from typing import Optional, Tuple
 
 import pika
+import requests
 from flask import Flask, escape, request
 from lxml import etree
+from requests.exceptions import RequestException
 from viaa.configuration import ConfigParser
 from viaa.observability import correlation, logging
 
-from .helpers import xml_builder
-from .services import mediahaven_service
+from .helpers.xml_helper import XMLBuilder
+from .services.mediahaven_service import MediahavenService
+from .services.rabbit_service import RabbitService
 
 app = Flask(__name__)
 config = ConfigParser()
 logger = logging.get_logger(__name__, config=config)
-correlation.initialize(flask=app, logger=logger, pika=pika)
+correlation.initialize(flask=app, logger=logger, pika=pika, requests=requests)
 
 
-class InvalidEventException(Exception):
-    """Exception raised when an event is invalid."""
+def get_event_and_fragment_id(premis_xml: bytes) -> Optional[Tuple[str, str]]:
+    """
+    Extracts the Mediahaven event and media id from an incoming premis event using xpath.
+    
+    Arguments:
+        premis_xml {bytes} -- Body of the incoming webhook from Mediahaven
+    
+    Raises:
+        InvalidEventException: Raised when either the media id or the eventname is not found.
+    
+    Returns:
+        Optional[Tuple[str, str]] -- Tuple of the eventname and Mediahaven media id.
+    """
 
-    pass
-
-
-def get_event_and_media_id(premis_xml: bytes) -> Tuple[str, str]:
     root = etree.fromstring(premis_xml)
 
     event: str = root.xpath(
         "string(//p:eventType)", namespaces={"p": "info:lc/xmlns/premis-v2"},
     )
-    media_id: str = root.xpath(
+    fragment_id: str = root.xpath(
         "string(//p:linkingObjectIdentifier[p:linkingObjectIdentifierType = 'MEDIAHAVEN_ID']/p:linkingObjectIdentifierValue)",
         namespaces={"p": "info:lc/xmlns/premis-v2"},
     )
 
-    if not media_id:
-        raise InvalidEventException("'MEDIAHAVEN_ID'")
-    if not event:
-        raise InvalidEventException("'eventType'")
+    if not fragment_id or not event:
+        logger.warning(
+            "'MEDIAHAVEN_ID' or 'eventType' is missing in the mediahaven event.",
+            premis_xml=premis_xml,
+        )
+        return (None, None)
+    return event, fragment_id
 
-    return event, media_id
 
+def get_pid_and_s3_object_key(fragment_id: str) -> Optional[Tuple[str, str]]:
+    """
+    Query Mediahaven for the given fragment id and return the pid and s3 object key if available, otherwise returns None.
+    
+    Arguments:
+        fragment_id {str} -- Fragment id for which the pid and s3 object key needs to be found. 
+    
+    Raises:
+        KeyError: Raised when no fragment is found or it lacks and s3 object key.
+    
+    Returns:
+        Optional[Tuple[str, str]] -- Tuple of the pid and s3 object key. (pid, s3_object_key)
+    """
 
-def query_mediahaven(media_id: str) -> Tuple[str, str]:
-    mediahaven_client = mediahaven_service.MediahavenService(config.config)
-    result = mediahaven_client.get_fragment(media_id)
-
+    mediahaven_client = MediahavenService(config.config)
+    fragment = mediahaven_client.get_fragment(fragment_id)
     try:
-        pid = result["MediaDataList"][0]["Administrative"]["ExternalId"]
-        s3_object_key = result["MediaDataList"][0]["Dynamic"]["s3_object_key"]
+        pid: str = fragment["MediaDataList"][0]["Administrative"]["ExternalId"]
+        s3_object_key: str = fragment["MediaDataList"][0]["Dynamic"]["s3_object_key"]
     except KeyError as error:
-        raise InvalidEventException(str(error))
-
+        logger.warning(
+            f"{error} is not found in the mediahaven object.",
+            fragment_id=fragment_id,
+            fragment=fragment,
+        )
+        return (None, None)
     return (pid, s3_object_key)
 
 
 def generate_vrt_xml(pid: str, s3_object_key: str) -> str:
+    """
+    Generates a basic xml for the essenceArchived event.
+    
+    Arguments:
+        pid {str} -- Pid of the archived item.
+        s3_object_key {str} -- S3 object key of the archived item.
+    
+    Returns:
+        str -- EssenceArchived XML with pid, s3 object key and timestamp.
+    """
+
     xml_data_dict = {
         "timestamp": str(datetime.now().isoformat()),
         "file": s3_object_key,
         "pid": pid,
     }
 
-    builder = xml_builder.XMLBuilder()
-
+    builder = XMLBuilder()
     builder.build(xml_data_dict)
+    xml = builder.to_string(True)
 
-    return builder.to_string(True)
-
-
-def publish_message(message: str):
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
-
-    channel = connection.channel()
-    channel.queue_declare(queue="vrt_events", durable=True)
-    channel.basic_publish(
-        exchange="",
-        routing_key="vrt_events",
-        body=message,
-        properties=pika.BasicProperties(delivery_mode=2,),  # make message persistent
-    )
-
-    connection.close()
+    return xml
 
 
 @app.route("/health/live")
@@ -93,35 +116,30 @@ def liveness_check() -> str:
 def handle_event() -> str:
     premis_xml = request.data
 
-    try:
-        (event, media_id) = get_event_and_media_id(premis_xml)
-    except InvalidEventException as error:
-        logger.warning(f"{error} is not found in the incoming event.", xml=premis_xml)
-        return str(error)
+    (event, fragment_id) = get_event_and_fragment_id(premis_xml)
+
+    if not event or not fragment_id:
+        return "NOK"
 
     # Check for FLOW.ARCHIVED and it's legacy variant ARCHIVED
     if event != "FLOW.ARCHIVED" and event != "ARCHIVED":
         logger.debug(f"Received '{event}'. Discard it.")
         return f"Received '{event}'. Discard it."
 
-    try:
-        (pid, s3_object_key) = query_mediahaven(media_id)
-    except InvalidEventException as error:
-        logger.warning(
-            f"{error} is not found in the mediahaven object.",
-            mediahaven_media_id=media_id,
-        )
+    (pid, s3_object_key) = get_pid_and_s3_object_key(fragment_id)
 
-        return str(error)
+    if not pid or not s3_object_key:
+        return "NOK"
 
     message = generate_vrt_xml(pid, s3_object_key)
 
-    publish_message(message)
+    rabbit = RabbitService(config=config.config)
+    rabbit.publish_message(message)
 
     logger.info(
         f"essenceArchivedEvent sent for {pid}.",
         mediahaven_event=event,
-        mediahaven_media_id=media_id,
+        fragment_id=fragment_id,
         pid=pid,
         s3_object_key=s3_object_key,
     )
