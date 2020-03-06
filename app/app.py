@@ -20,9 +20,9 @@ logger = logging.get_logger(__name__, config=config)
 correlation.initialize(flask=app, logger=logger, pika=pika, requests=requests)
 
 
-def get_event_and_fragment_id(premis_xml: bytes) -> Optional[Tuple[str, str]]:
+def get_event_and_fragment_id(premis_xml: bytes) -> Tuple[str, str]:
     """
-    Extracts the Mediahaven event and media id from an incoming premis event using xpath.
+    Extracts the Mediahaven event and media id from an incoming premis event using xpath. Returns empty strings
     
     Arguments:
         premis_xml {bytes} -- Body of the incoming webhook from Mediahaven
@@ -31,7 +31,7 @@ def get_event_and_fragment_id(premis_xml: bytes) -> Optional[Tuple[str, str]]:
         InvalidEventException: Raised when either the media id or the eventname is not found.
     
     Returns:
-        Optional[Tuple[str, str]] -- Tuple of the eventname and Mediahaven media id.
+        Tuple[str, str] -- Tuple of the eventname and Mediahaven media id.
     """
 
     root = etree.fromstring(premis_xml)
@@ -49,13 +49,13 @@ def get_event_and_fragment_id(premis_xml: bytes) -> Optional[Tuple[str, str]]:
             "'MEDIAHAVEN_ID' or 'eventType' is missing in the mediahaven event.",
             premis_xml=premis_xml,
         )
-        return (None, None)
+
     return event, fragment_id
 
 
-def get_pid_and_s3_object_key(fragment_id: str) -> Optional[Tuple[str, str]]:
+def get_pid_and_s3_object_key(fragment_id: str) -> Tuple[str, str]:
     """
-    Query Mediahaven for the given fragment id and return the pid and s3 object key if available, otherwise returns None.
+    Query Mediahaven for the given fragment id and return the pid and s3 object key if available, otherwise returns empty strings.
     
     Arguments:
         fragment_id {str} -- Fragment id for which the pid and s3 object key needs to be found. 
@@ -64,7 +64,7 @@ def get_pid_and_s3_object_key(fragment_id: str) -> Optional[Tuple[str, str]]:
         KeyError: Raised when no fragment is found or it lacks and s3 object key.
     
     Returns:
-        Optional[Tuple[str, str]] -- Tuple of the pid and s3 object key. (pid, s3_object_key)
+        Tuple[str, str] -- Tuple of the pid and s3 object key. (pid, s3_object_key)
     """
 
     mediahaven_client = MediahavenService(config.config)
@@ -78,7 +78,7 @@ def get_pid_and_s3_object_key(fragment_id: str) -> Optional[Tuple[str, str]]:
             fragment_id=fragment_id,
             fragment=fragment,
         )
-        return (None, None)
+        return ("", "")
     return (pid, s3_object_key)
 
 
@@ -115,16 +115,10 @@ def liveness_check() -> str:
 @app.route("/event", methods=["POST"])
 def handle_event() -> str:
     premis_xml = request.data
-
     (event, fragment_id) = get_event_and_fragment_id(premis_xml)
 
-    if not event or not fragment_id:
+    if not fragment_id or event != "FLOW.ARCHIVED":
         return "NOK"
-
-    # Check for FLOW.ARCHIVED and it's legacy variant ARCHIVED
-    if event != "FLOW.ARCHIVED" and event != "ARCHIVED":
-        logger.debug(f"Received '{event}'. Discard it.")
-        return f"Received '{event}'. Discard it."
 
     (pid, s3_object_key) = get_pid_and_s3_object_key(fragment_id)
 
@@ -133,8 +127,7 @@ def handle_event() -> str:
 
     message = generate_vrt_xml(pid, s3_object_key)
 
-    rabbit = RabbitService(config=config.config)
-    rabbit.publish_message(message)
+    RabbitService(config=config.config).publish_message(message)
 
     logger.info(
         f"essenceArchivedEvent sent for {pid}.",
