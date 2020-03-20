@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 import pika
 import requests
 from flask import Flask, escape, request
+from flask_api import status
 from lxml import etree
 from requests.exceptions import RequestException
 from viaa.configuration import ConfigParser
@@ -112,16 +113,17 @@ def generate_vrt_xml(pid: str, s3_object_key: str) -> str:
 
 @app.route("/health/live")
 def liveness_check() -> str:
-    return "OK"
+    return "OK", status.HTTP_200_OK
 
 
 @app.route("/event", methods=["POST"])
 def handle_event() -> str:
     premis_xml = request.data
+
     (event, fragment_id) = get_event_and_fragment_id(premis_xml)
 
     if not fragment_id or event != "FLOW.ARCHIVED":
-        return "NOK"
+        return "NOK", status.HTTP_400_BAD_REQUEST
 
     (pid, s3_object_key) = get_pid_and_s3_object_key(fragment_id)
 
@@ -140,4 +142,4 @@ def handle_event() -> str:
         s3_object_key=s3_object_key,
     )
 
-    return "OK"
+    return "OK", status.HTTP_200_OK
