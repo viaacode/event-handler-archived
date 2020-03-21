@@ -1,82 +1,16 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
-SINGLE_PREMIS_EVENT = b'''<?xml version="1.0" encoding="UTF-8"?>
-<events>
-  <premis:event xmlns:premis="info:lc/xmlns/premis-v2">
-    <premis:eventIdentifier>
-      <premis:eventIdentifierType>MEDIAHAVEN_EVENT</premis:eventIdentifierType>
-      <premis:eventIdentifierValue>111</premis:eventIdentifierValue>
-    </premis:eventIdentifier>
-    <premis:eventType>EXPORT</premis:eventType>
-    <premis:eventDateTime>2019-03-30T05:28:40Z</premis:eventDateTime>
-    <premis:eventDetail>Because I'm such a nice guy</premis:eventDetail>
-    <premis:eventOutcomeInformation>
-      <premis:eventOutcome>OK</premis:eventOutcome>
-    </premis:eventOutcomeInformation>
-    <premis:linkingAgentIdentifier>
-      <premis:linkingAgentIdentifierType>MEDIAHAVEN_USER</premis:linkingAgentIdentifierType>
-      <premis:linkingAgentIdentifierValue>703a53d2-dc66-4eb2-ab7f-73d5fd228852</premis:linkingAgentIdentifierValue>
-    </premis:linkingAgentIdentifier>
-    <premis:linkingObjectIdentifier>
-      <premis:linkingObjectIdentifierType>MEDIAHAVEN_ID</premis:linkingObjectIdentifierType>
-      <premis:linkingObjectIdentifierValue>a1b2c3</premis:linkingObjectIdentifierValue>
-    </premis:linkingObjectIdentifier>
-    <premis:linkingObjectIdentifier>
-      <premis:linkingObjectIdentifierType>EXTERNAL_ID</premis:linkingObjectIdentifierType>
-      <premis:linkingObjectIdentifierValue>a1</premis:linkingObjectIdentifierValue>
-    </premis:linkingObjectIdentifier>
-  </premis:event>
-</events>
-'''
 
-MULTI_PREMIS_EVENT = b'''<?xml version="1.0" encoding="UTF-8"?>
-<events>
-  <premis:event xmlns:premis="info:lc/xmlns/premis-v2">
-    <premis:eventIdentifier>
-      <premis:eventIdentifierType>MEDIAHAVEN_EVENT</premis:eventIdentifierType>
-      <premis:eventIdentifierValue>222</premis:eventIdentifierValue>
-    </premis:eventIdentifier>
-    <premis:eventType>EXPORT</premis:eventType>
-    <premis:eventDateTime>2020-03-30T05:28:40Z</premis:eventDateTime>
-    <premis:eventDetail>Because I'm such a super nice guy</premis:eventDetail>
-    <premis:eventOutcomeInformation>
-      <premis:eventOutcome>OK</premis:eventOutcome>
-    </premis:eventOutcomeInformation>
-    <premis:linkingAgentIdentifier>
-      <premis:linkingAgentIdentifierType>MEDIAHAVEN_USER</premis:linkingAgentIdentifierType>
-      <premis:linkingAgentIdentifierValue>703a53d2-dc66-4eb2-ab7f-73d5fd228852</premis:linkingAgentIdentifierValue>
-    </premis:linkingAgentIdentifier>
-    <premis:linkingObjectIdentifier>
-      <premis:linkingObjectIdentifierType>MEDIAHAVEN_ID</premis:linkingObjectIdentifierType>
-      <premis:linkingObjectIdentifierValue>a1b2c3</premis:linkingObjectIdentifierValue>
-    </premis:linkingObjectIdentifier>
-    <premis:linkingObjectIdentifier>
-      <premis:linkingObjectIdentifierType>EXTERNAL_ID</premis:linkingObjectIdentifierType>
-      <premis:linkingObjectIdentifierValue>b2</premis:linkingObjectIdentifierValue>
-    </premis:linkingObjectIdentifier>
-  </premis:event>
-  <premis:event xmlns:premis="info:lc/xmlns/premis-v2">
-    <premis:eventIdentifier>
-      <premis:eventIdentifierType>MEDIAHAVEN_EVENT</premis:eventIdentifierType>
-      <premis:eventIdentifierValue>333</premis:eventIdentifierValue>
-    </premis:eventIdentifier>
-    <premis:eventType>FLOW.ARCHIVED</premis:eventType>
-    <premis:eventDateTime>2019-03-30T05:28:40Z</premis:eventDateTime>
-    <premis:eventDetail>Because I'm such a nice guy</premis:eventDetail>
-    <premis:eventOutcomeInformation>
-      <premis:eventOutcome>OK</premis:eventOutcome>
-    </premis:eventOutcomeInformation>
-    <premis:linkingAgentIdentifier>
-      <premis:linkingAgentIdentifierType>MEDIAHAVEN_USER</premis:linkingAgentIdentifierType>
-      <premis:linkingAgentIdentifierValue>703a53d2-dc66-4eb2-ab7f-73d5fd228852</premis:linkingAgentIdentifierValue>
-    </premis:linkingAgentIdentifier>
-    <premis:linkingObjectIdentifier>
-      <premis:linkingObjectIdentifierType>MEDIAHAVEN_ID</premis:linkingObjectIdentifierType>
-      <premis:linkingObjectIdentifierValue>d4e5f6</premis:linkingObjectIdentifierValue>
-    </premis:linkingObjectIdentifier>
-    <premis:linkingObjectIdentifier>
-      <premis:linkingObjectIdentifierType>EXTERNAL_ID</premis:linkingObjectIdentifierType>
-      <premis:linkingObjectIdentifierValue>c3</premis:linkingObjectIdentifierValue>
-    </premis:linkingObjectIdentifier>
-  </premis:event>
-</events>
-'''
+with open('./tests/resources/single_premis_event.xml', 'rb') as f:
+    single_premis_event = f.read()
+
+with open('./tests/resources/multi_premis_event.xml', 'rb') as f:
+    multi_premis_event = f.read()
+
+with open('./tests/resources/invalid_premis_event.xml', 'rb') as f:
+    invalid_premis_event = f.read()
+
+with open('./tests/resources/invalid_xml_event.xml', 'rb') as f:
+    invalid_xml_event = f.read()
+
