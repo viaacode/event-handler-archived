@@ -89,6 +89,6 @@ class PremisEvents:
             events.append(PremisEvent(element))
         if not events:
             raise InvalidPremisEventException(
-                f"Premis XML doesn't seem valid. Root tag: {self.xml_tree.docinfo.root_name}, encoding: {self.xml_tree.docinfo.encoding}"
+                f'No events found at xpath "/events/p:event": Root tag=<{self.xml_tree.docinfo.root_name}>, encoding="{self.xml_tree.docinfo.encoding}"'
             )
         return events
