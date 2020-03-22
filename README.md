@@ -52,15 +52,32 @@ is < 3.
 The application is now serving requests on `localhost:8080`. Try it with:
 
 ```
-$ curl -X GET localhost:8080/health/live
+$ curl -v -X GET localhost:8080/health/live
 ```
+
+and:
+
+```
+$ curl -v -X POST \
+    -H "Content-type: text/xml; charset=utf-8" \
+    --data-binary @tests/resources/single_premis_event.xml \
+    localhost:8080/event
+
+$ curl -v -X POST \
+    -H "Content-type: text/xml; charset=utf-8" \
+    --data-binary @tests/resources/multi_premis_event.xml \
+    localhost:8080/event
+```
+
 
 ### Running using Docker
 
 1. Build the container:
 
-   `$ docker build . -t mediahaven2vrt`
+   `$ docker build . -t event-handler-archived`
 
 2. Run the container:
 
-   `$ docker run -p 8080:8080 mediahaven2vrt`
+   `$ docker run -p 8080:8080 event-handler-archived`
+
+You can try the same cURL commands as specified above.
