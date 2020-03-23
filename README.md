@@ -45,7 +45,11 @@ is < 3.
         --trusted-host do-prd-mvn-01.do.viaa.be
    ```
 
-4. Run the application:
+4. Run the tests with:
+
+    `$ pytest -v`
+
+5. Run the application:
 
    `$ uwsgi -i uwsgi.ini`
 
@@ -55,19 +59,47 @@ The application is now serving requests on `localhost:8080`. Try it with:
 $ curl -v -X GET localhost:8080/health/live
 ```
 
-and:
+#### Testing different events
 
-```
-$ curl -v -X POST \
+Different events (as XML-files) are stored under `./tests/resources/`. Try them with:
+
+##### Single event
+
+```bash
+$ curl -i -X POST \
     -H "Content-type: text/xml; charset=utf-8" \
     --data-binary @tests/resources/single_premis_event.xml \
     localhost:8080/event
+```
 
-$ curl -v -X POST \
+##### Multiple events in one payload
+
+```bash
+$ curl -i -X POST \
     -H "Content-type: text/xml; charset=utf-8" \
     --data-binary @tests/resources/multi_premis_event.xml \
     localhost:8080/event
 ```
+
+##### Invalid event
+
+```bash
+$ curl -i -X POST \
+    -H "Content-type: text/xml; charset=utf-8" \
+    --data-binary @tests/resources/invalid_premis_event.xml \
+    localhost:8080/event
+```
+
+##### Invalid XML payload
+
+```bash
+$ curl -i -X POST \
+    -H "Content-type: text/xml; charset=utf-8" \
+    --data-binary @tests/resources/invalid_xml_event.xml \
+    localhost:8080/event
+```
+
+These should return proper informative messages to the client caller.
 
 
 ### Running using Docker
