@@ -13,7 +13,6 @@ from tests.resources import (
 from app.helpers.events_parser import (
     PremisEvents,
     InvalidPremisEventException,
-    InvalidXMLException,
 )
 
 
@@ -22,7 +21,7 @@ def test_single_event():
     assert len(p.events) == 1
     assert p.events[0].event_id == "111"
     assert p.events[0].fragment_id == "a1b2c3"
-    assert p.events[0].event_type == "EXPORT"
+    assert p.events[0].event_type == "FLOW.ARCHIVED"
 
 def test_multi_event():
     p = PremisEvents(multi_premis_event)
