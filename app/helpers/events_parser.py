@@ -22,7 +22,9 @@ class PremisEvent:
         self.xml_element = element
         self.event_type: str = self._get_event_type()
         self.event_datetime: str = self._get_event_datetime()
+        self.event_detail: str = self._get_event_detail()
         self.event_id: str = self._get_event_id()
+        self.event_outcome: str = self._get_event_outcome()
         self.fragment_id: str = self._get_fragment_id()
         self.external_id: str = self._get_external_id()
         self.is_valid: bool = self._is_valid()
@@ -37,9 +39,20 @@ class PremisEvent:
             "./p:eventDateTime", namespaces={"p": PREMIS_NAMESPACE}
         )[0].text
 
+    def _get_event_detail(self) -> str:
+        return self.xml_element.xpath(
+            "./p:eventDetail", namespaces={"p": PREMIS_NAMESPACE}
+        )[0].text
+
     def _get_event_id(self) -> str:
         return self.xml_element.xpath(
             "./p:eventIdentifier[p:eventIdentifierType='MEDIAHAVEN_EVENT']/p:eventIdentifierValue",
+            namespaces={"p": PREMIS_NAMESPACE},
+        )[0].text
+
+    def _get_event_outcome(self) -> str:
+        return self.xml_element.xpath(
+            "./p:eventOutcomeInformation/p:eventOutcome",
             namespaces={"p": PREMIS_NAMESPACE},
         )[0].text
 
@@ -56,7 +69,14 @@ class PremisEvent:
         )[0].text
 
     def _is_valid(self):
-        if self.event_type in VALID_EVENT_TYPES and self.fragment_id:
+        """A PremisEvent is valid only if:
+            - it has a valid eventType for this particular application,
+            - if it has a fragment ID,
+            - if it's eventOutcome is 'OK'.
+        """
+        if (self.event_type in VALID_EVENT_TYPES and
+            self.fragment_id and
+            self.event_outcome == 'OK'):
             return True
         return False
 

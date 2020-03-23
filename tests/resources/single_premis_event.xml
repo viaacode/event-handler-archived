@@ -7,7 +7,7 @@
     </premis:eventIdentifier>
     <premis:eventType>FLOW.ARCHIVED</premis:eventType>
     <premis:eventDateTime>2019-03-30T05:28:40Z</premis:eventDateTime>
-    <premis:eventDetail>Because I'm such a nice guy</premis:eventDetail>
+    <premis:eventDetail>Ionic Defibulizer</premis:eventDetail>
     <premis:eventOutcomeInformation>
       <premis:eventOutcome>OK</premis:eventOutcome>
     </premis:eventOutcomeInformation>
