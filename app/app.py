@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 from datetime import datetime
 from io import BytesIO
 from typing import Optional, Tuple
@@ -5,52 +8,22 @@ from typing import Optional, Tuple
 import pika
 import requests
 from flask import Flask, escape, request
+from flask_api import status
 from lxml import etree
+from lxml.etree import XMLSyntaxError
 from requests.exceptions import RequestException
 from viaa.configuration import ConfigParser
 from viaa.observability import correlation, logging
 
 from .helpers.xml_helper import XMLBuilder
+from .helpers.events_parser import PremisEvents, InvalidPremisEventException
 from .services.mediahaven_service import MediahavenService
 from .services.rabbit_service import RabbitService
 
 app = Flask(__name__)
 config = ConfigParser()
-logger = logging.get_logger(__name__, config=config)
-correlation.initialize(flask=app, logger=logger, pika=pika, requests=requests)
-
-
-def get_event_and_fragment_id(premis_xml: bytes) -> Tuple[str, str]:
-    """
-    Extracts the Mediahaven event and media id from an incoming premis event using xpath. Returns empty strings
-    
-    Arguments:
-        premis_xml {bytes} -- Body of the incoming webhook from Mediahaven
-    
-    Raises:
-        InvalidEventException: Raised when either the media id or the eventname is not found.
-    
-    Returns:
-        Tuple[str, str] -- Tuple of the eventname and Mediahaven media id.
-    """
-
-    root = etree.fromstring(premis_xml)
-
-    event: str = root.xpath(
-        "string(//p:eventType)", namespaces={"p": "info:lc/xmlns/premis-v2"},
-    )
-    fragment_id: str = root.xpath(
-        "string(//p:linkingObjectIdentifier[p:linkingObjectIdentifierType = 'MEDIAHAVEN_ID']/p:linkingObjectIdentifierValue)",
-        namespaces={"p": "info:lc/xmlns/premis-v2"},
-    )
-
-    if not fragment_id or not event:
-        logger.warning(
-            "'MEDIAHAVEN_ID' or 'eventType' is missing in the mediahaven event.",
-            premis_xml=premis_xml,
-        )
-
-    return event, fragment_id
+log = logging.get_logger(__name__, config=config)
+correlation.initialize(flask=app, logger=log, pika=pika, requests=requests)
 
 
 def get_pid_and_s3_object_key(fragment_id: str) -> Tuple[str, str]:
@@ -73,7 +46,7 @@ def get_pid_and_s3_object_key(fragment_id: str) -> Tuple[str, str]:
         pid: str = fragment["MediaDataList"][0]["Administrative"]["ExternalId"]
         s3_object_key: str = fragment["MediaDataList"][0]["Dynamic"]["s3_object_key"]
     except KeyError as error:
-        logger.warning(
+        log.warning(
             f"{error} is not found in the mediahaven object.",
             fragment_id=fragment_id,
             fragment=fragment,
@@ -109,32 +82,34 @@ def generate_vrt_xml(pid: str, s3_object_key: str) -> str:
 
 @app.route("/health/live")
 def liveness_check() -> str:
-    return "OK"
+    return "OK", status.HTTP_200_OK
 
 
 @app.route("/event", methods=["POST"])
 def handle_event() -> str:
-    premis_xml = request.data
-    (event, fragment_id) = get_event_and_fragment_id(premis_xml)
+    # Get and parse the incoming event(s)
+    log.debug(request.data)
+    try:
+        premis_events = PremisEvents(request.data)
+    except (XMLSyntaxError, InvalidPremisEventException) as e:
+        log.error(e)
+        return f"NOK: {e}", status.HTTP_400_BAD_REQUEST
 
-    if not fragment_id or event != "FLOW.ARCHIVED":
-        return "NOK"
-
-    (pid, s3_object_key) = get_pid_and_s3_object_key(fragment_id)
-
-    if not pid or not s3_object_key:
-        return "NOK"
-
-    message = generate_vrt_xml(pid, s3_object_key)
-
-    RabbitService(config=config.config).publish_message(message)
-
-    logger.info(
-        f"essenceArchivedEvent sent for {pid}.",
-        mediahaven_event=event,
-        fragment_id=fragment_id,
-        pid=pid,
-        s3_object_key=s3_object_key,
-    )
-
-    return "OK"
+    log.debug(f"Events in payload: {len(premis_events.events)}")
+    for event in premis_events.events:
+        log.debug(f"event_type: {event.event_type} / fragment_id: {event.fragment_id} / external_id: {event.external_id}")
+        # is_valid means we have a FragmentID and a "FLOW.ARCHIVED" eventType
+        if event.is_valid:
+            (pid, s3_object_key) = get_pid_and_s3_object_key(event.fragment_id)
+            message = generate_vrt_xml(event.external_id, s3_object_key)
+            RabbitService(config=config.config).publish_message(message)
+            log.info(
+                f"essenceArchivedEvent sent for {pid}.",
+                mediahaven_event=event.event_type,
+                fragment_id=event.fragment_id,
+                pid=event.external_id,
+                s3_object_key=s3_object_key,
+            )
+        else:
+            log.debug(f"Dropping event -> ID:{event.event_id}, type:{event.event_type}")
+    return "OK", status.HTTP_200_OK

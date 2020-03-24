@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import pika
 from pika.credentials import PlainCredentials
 from viaa.configuration import ConfigParser

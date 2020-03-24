@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root>
+    <node1>This is valid XML...</node1>
+    <node2>... but it is not a premis event</node2>
+</root>

@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 from lxml import etree
 
 
@@ -34,4 +37,3 @@ class XMLBuilder(object):
             encoding=self.XML_ENCODING,
             xml_declaration=True,
         ).decode("utf-8")
-
