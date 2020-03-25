@@ -1,0 +1,35 @@
+kind: "DeploymentConfig"
+apiVersion: "v1"
+metadata:
+  name: "event-handler-archived-prd"
+  label:
+    app: "event-handler-archived"
+spec:
+  template: 
+    metadata:
+      labels:
+        app: "event-handler-archived"
+    spec:
+      containers:
+        - name: "event-handler-archived"
+          image: "event-handler-archived:prd"
+          ports:
+            - containerPort: 8080
+              protocol: "TCP"
+  replicas: 1
+  triggers:
+    - type: "ConfigChange" 
+    - type: "ImageChange" 
+      imageChangeParams:
+        automatic: true
+        containerNames:
+          - "event-handler-archived"
+        from:
+          kind: "ImageStreamTag"
+          name: "event-handler-archived:prd"
+          namespace: vrt-intake
+  strategy: 
+    type: "Rolling"
+  paused: false 
+  revisionHistoryLimit: 2 
+  minReadySeconds: 0 
