@@ -24,7 +24,7 @@ def test_single_event():
     assert p.events[0].event_detail == "Ionic Defibulizer"
     assert p.events[0].fragment_id == "a1b2c3"
     assert p.events[0].event_type == "FLOW.ARCHIVED"
-    assert p.events[0].event_outcome == "OK"
+    assert p.events[0].event_outcome == "NOK"
     assert p.events[0].is_valid
 
 def test_multi_event():

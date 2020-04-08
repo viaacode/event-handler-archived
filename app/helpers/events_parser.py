@@ -71,12 +71,10 @@ class PremisEvent:
     def _is_valid(self):
         """A PremisEvent is valid only if:
             - it has a valid eventType for this particular application,
-            - if it has a fragment ID,
-            - if it's eventOutcome is 'OK'.
+            - if it has a fragment ID.
         """
         if (self.event_type in VALID_EVENT_TYPES and
-            self.fragment_id and
-            self.event_outcome == 'OK'):
+            self.fragment_id):
             return True
         return False
 
