@@ -2,8 +2,10 @@
 
 ## Synopsis
 
-Handles incoming webhooks from Mediahaven. It transforms the incoming event and
-forwards it to a Rabbit queue.
+Handles incoming webhooks from Mediahaven. It transforms the incoming events and
+forwards it to a Rabbit queue. It will only accept events of type `"FLOW.ARCHIVED"`.
+It will drop all other types. For more information on configuring RabbitMQ see
+[RabbitMQ](#RabbitMQ).
 
 ## Prerequisites
 
@@ -106,10 +108,43 @@ These should return proper informative messages to the client caller.
 
 1. Build the container:
 
-   `$ docker build . -t event-handler-archived`
+   `$ docker build -t event-handler-archived/app .`
 
 2. Run the container:
 
-   `$ docker run -p 8080:8080 event-handler-archived`
+   `$ docker run -p 8080:8080 --rm event-handler-archived/app`
 
 You can try the same cURL commands as specified above.
+
+#### RabbitMQ
+
+As the app sends the transformed messages to a RabbitMQ queue, we'll need to run
+and setup an instance of a RabbitMQ service. If no such service is available, you
+can easily use a Docker container to do so.
+
+1. Build the container:
+
+   `$ docker build -f ./Docker/Dockerfile.rabbitmq -t event-handler-archived/rabbitmq ./Docker`
+
+2. Run the container:
+
+   `$ docker run -p 5672:5672 -p 15672:15672 --rm event-handler-archived/rabbitmq`
+
+Go to `localhost:15672` and log in with `guest/guest` to see if it is running successfully.
+
+The messages will be send via direct exchange type to the queue defined in `config.yml`.
+
+#### Docker Compose
+
+If you want to run the app in a container as well as the rabbit container, you'll
+need to make sure that they are allowed to communicate with each other.
+You can use `Docker Compose` to do so:
+
+   `$ docker-compose up`
+
+Check if they are running with:
+
+   `$ docker-compose ps`
+
+In the `config.yml` file, be sure to point the rabbit host to the RabbitMQ container name
+and not localhost. Send the same cURL commands as specified above.
