@@ -1,0 +1,25 @@
+version: '2'
+services:
+  app:
+    container_name: event-handler-archived_app
+    image: event-handler-archived/app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - "./:/usr/src/app"
+    mem_limit: 256m
+    depends_on: 
+      - rabbitmq
+  rabbitmq:
+    container_name: event-handler-archived_rabbitmq
+    image: event-handler-archived/rabbitmq
+    build:
+      context: ./Docker
+      dockerfile: Dockerfile.rabbitmq
+    ports:
+    - "5672:5672"
+    - "15672:15672"
+    mem_limit: 256m
