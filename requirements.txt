@@ -25,6 +25,7 @@ py==1.8.1
 pylint==2.4.4
 pyparsing==2.4.6
 pytest==5.3.4
+pytest-cov==2.8.1
 python-json-logger==0.1.11
 PyYAML==5.3
 regex==2020.2.20
