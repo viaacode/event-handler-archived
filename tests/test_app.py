@@ -14,7 +14,11 @@ from app.app import (
 def test_generate_vrt_xml():
     pid = 'a1b2c3'
     object_key = 'an_object_key'
-    xml = generate_vrt_xml(pid, object_key)
+    md5 = 'abcdef123456'
+    bucket = 'a_bucket'
+    xml = generate_vrt_xml(pid, md5, bucket, object_key)
     tree = etree.parse(BytesIO(xml.encode('utf-8')))
     assert tree.xpath('/m:essenceArchivedEvent/m:pid/text()', namespaces={"m":"http://www.vrt.be/mig/viaa/api"})[0] == pid
     assert tree.xpath('/m:essenceArchivedEvent/m:file/text()', namespaces={"m":"http://www.vrt.be/mig/viaa/api"})[0] == object_key
+    assert tree.xpath('/m:essenceArchivedEvent/m:bucket/text()', namespaces={"m":"http://www.vrt.be/mig/viaa/api"})[0] == bucket
+    assert tree.xpath('/m:essenceArchivedEvent/m:md5/text()', namespaces={"m":"http://www.vrt.be/mig/viaa/api"})[0] == md5
