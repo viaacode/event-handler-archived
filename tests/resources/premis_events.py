@@ -13,4 +13,3 @@ with open('./tests/resources/invalid_premis_event.xml', 'rb') as f:
 
 with open('./tests/resources/invalid_xml_event.xml', 'rb') as f:
     invalid_xml_event = f.read()
-

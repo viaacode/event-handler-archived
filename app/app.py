@@ -79,8 +79,8 @@ def generate_vrt_xml(pid: str, md5: str, s3_bucket: str, s3_object_key: str) -> 
         "timestamp": str(datetime.now().isoformat()),
         "file": s3_object_key,
         "pid": pid,
-        "bucket": s3_bucket,
-        "md5": md5,
+        "s3bucket": s3_bucket,
+        "md5sum": md5,
     }
 
     builder = XMLBuilder()
