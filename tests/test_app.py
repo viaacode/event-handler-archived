@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from io import BytesIO
+import os
 
 from lxml import etree
 
@@ -33,8 +34,10 @@ def test_generate_vrt_xml_against_xsd():
     md5 = 'abcdef123456'
     bucket = 'a_bucket'
     xml = generate_vrt_xml(pid, md5, bucket, object_key)
-    schema = etree.XMLSchema(file="./tests/resources/essenceArchivedEvent.xsd")
-    parser = etree.XMLParser(schema = schema)
-    # Act & Assert: parsing with a schema-aware parser will raise an
-    # `lxml.etree.XMLSyntaxError` if not valid
-    tree = etree.parse(BytesIO(xml.encode('utf-8')), parser)
+    xsd_file = os.path.join(os.path.dirname(__file__),'resources','essenceArchivedEvent.xsd')
+    schema = etree.XMLSchema(file=xsd_file)
+    # Act
+    tree = etree.parse(BytesIO(xml.encode('utf-8')))
+    is_xml_valid = schema.validate(tree)
+    # Assert
+    assert is_xml_valid == True
