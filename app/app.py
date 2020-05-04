@@ -63,24 +63,28 @@ def get_fragment_metadata(fragment_id: str) -> Dict[str, str]:
     }
 
 
-def generate_vrt_xml(pid: str, md5: str, s3_bucket: str, s3_object_key: str) -> str:
+def generate_vrt_xml(fragment_info: dict, event_timestamp: str) -> str:
     """
     Generates a basic xml for the essenceArchived event.
-    
+
     Arguments:
-        pid {str} -- Pid of the archived item.
-        s3_object_key {str} -- S3 object key of the archived item.
-    
+        fragment_info {Dict[str,str]} -- Dictionary containing:
+            pid {str} -- Pid of the archived item.
+            md5 {str} -- The md5 checksum of the archived item.
+            s3_bucket {str} -- S3 bucket of the archived item.
+            s3_object_key {str} -- S3 object key of the archived item.
+        event_timestamp {str} -- Timestamp of archived event.
+
     Returns:
-        str -- EssenceArchived XML with pid, s3 object key and timestamp.
+        str -- EssenceArchived XML with pid, s3 object key, md5 checksum, s3 bucket and timestamp.
     """
 
     xml_data_dict = {
-        "timestamp": str(datetime.now().isoformat()),
-        "file": s3_object_key,
-        "pid": pid,
-        "s3bucket": s3_bucket,
-        "md5sum": md5,
+        "timestamp": event_timestamp,
+        "file": fragment_info["s3_object_key"],
+        "pid": fragment_info["pid"],
+        "s3bucket": fragment_info["s3_bucket"],
+        "md5sum": fragment_info["md5"],
     }
 
     builder = XMLBuilder()
@@ -114,10 +118,8 @@ def handle_event() -> str:
         if event.is_valid:
             fragment_info = get_fragment_metadata(event.fragment_id)
             message = generate_vrt_xml(
-                fragment_info["pid"],
-                fragment_info["md5"],
-                fragment_info["s3_bucket"],
-                fragment_info["s3_object_key"],
+                fragment_info,
+                event.event_datetime,
             )
             RabbitService(config=config.config).publish_message(message)
             log.info(
