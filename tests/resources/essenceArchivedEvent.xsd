@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema elementFormDefault="qualified" targetNamespace="http://www.vrt.be/mig/viaa/api" xmlns:tns="http://www.vrt.be/mig/viaa/api" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ebu="urn:ebu:metadata-schema:ebuCore_2012">
+  <xs:import schemaLocation="EBU_CORE_20121115.xsd" namespace="urn:ebu:metadata-schema:ebuCore_2012" />
+  <xs:element name="essenceArchivedEvent">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="timestamp" type="xs:dateTime" />
+        <xs:element name="file" type="xs:string" />
+        <xs:element name="pid" type="xs:string" />
+        <xs:element name="md5sum" type="xs:string" />
+        <xs:element name="s3bucket" type="xs:string" />
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

@@ -3,7 +3,7 @@
 
 from datetime import datetime
 from io import BytesIO
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 
 import pika
 import requests
@@ -26,9 +26,10 @@ log = logging.get_logger(__name__, config=config)
 correlation.initialize(flask=app, logger=log, pika=pika, requests=requests)
 
 
-def get_pid_and_s3_object_key(fragment_id: str) -> Tuple[str, str]:
+def get_fragment_metadata(fragment_id: str) -> Dict[str, str]:
     """
-    Query Mediahaven for the given fragment id and return the pid and s3 object key if available, otherwise returns empty strings.
+    Query Mediahaven for the given fragment id.
+    Return the pid, md5, s3 object key and s3 bucket if available, otherwise returns empty strings.
     
     Arguments:
         fragment_id {str} -- Fragment id for which the pid and s3 object key needs to be found. 
@@ -37,7 +38,7 @@ def get_pid_and_s3_object_key(fragment_id: str) -> Tuple[str, str]:
         KeyError: Raised when no fragment is found or it lacks and s3 object key.
     
     Returns:
-        Tuple[str, str] -- Tuple of the pid and s3 object key. (pid, s3_object_key)
+        Dict[str, str] -- Dictionary containing the retrieved metadata
     """
 
     mediahaven_client = MediahavenService(config.config)
@@ -45,17 +46,24 @@ def get_pid_and_s3_object_key(fragment_id: str) -> Tuple[str, str]:
     try:
         pid: str = fragment["MediaDataList"][0]["Administrative"]["ExternalId"]
         s3_object_key: str = fragment["MediaDataList"][0]["Dynamic"]["s3_object_key"]
+        s3_bucket: str = fragment["MediaDataList"][0]["Dynamic"]["s3_bucket"]
+        md5: str = fragment["MediaDataList"][0]["Technical"]["Md5"]
     except KeyError as error:
         log.warning(
             f"{error} is not found in the mediahaven object.",
             fragment_id=fragment_id,
             fragment=fragment,
         )
-        return ("", "")
-    return (pid, s3_object_key)
+        pid, md5, s3_object_key, s3_bucket = "", "", "", ""
+    return {
+        "pid": pid,
+        "md5": md5,
+        "s3_object_key": s3_object_key,
+        "s3_bucket": s3_bucket,
+    }
 
 
-def generate_vrt_xml(pid: str, s3_object_key: str) -> str:
+def generate_vrt_xml(pid: str, md5: str, s3_bucket: str, s3_object_key: str) -> str:
     """
     Generates a basic xml for the essenceArchived event.
     
@@ -71,6 +79,8 @@ def generate_vrt_xml(pid: str, s3_object_key: str) -> str:
         "timestamp": str(datetime.now().isoformat()),
         "file": s3_object_key,
         "pid": pid,
+        "s3bucket": s3_bucket,
+        "md5sum": md5,
     }
 
     builder = XMLBuilder()
@@ -97,18 +107,26 @@ def handle_event() -> str:
 
     log.debug(f"Events in payload: {len(premis_events.events)}")
     for event in premis_events.events:
-        log.debug(f"event_type: {event.event_type} / fragment_id: {event.fragment_id} / external_id: {event.external_id}")
+        log.debug(
+            f"event_type: {event.event_type} / fragment_id: {event.fragment_id} / external_id: {event.external_id}"
+        )
         # is_valid means we have a FragmentID and a "FLOW.ARCHIVED" eventType
         if event.is_valid:
-            (pid, s3_object_key) = get_pid_and_s3_object_key(event.fragment_id)
-            message = generate_vrt_xml(event.external_id, s3_object_key)
+            fragment_info = get_fragment_metadata(event.fragment_id)
+            message = generate_vrt_xml(
+                fragment_info["pid"],
+                fragment_info["md5"],
+                fragment_info["s3_bucket"],
+                fragment_info["s3_object_key"],
+            )
             RabbitService(config=config.config).publish_message(message)
             log.info(
-                f"essenceArchivedEvent sent for {pid}.",
+                f"essenceArchivedEvent sent for {event.external_id}.",
                 mediahaven_event=event.event_type,
                 fragment_id=event.fragment_id,
                 pid=event.external_id,
-                s3_object_key=s3_object_key,
+                s3_bucket=fragment_info["s3_bucket"],
+                s3_object_key=fragment_info["s3_object_key"],
             )
         else:
             log.debug(f"Dropping event -> ID:{event.event_id}, type:{event.event_type}")

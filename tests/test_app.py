@@ -3,16 +3,16 @@
 
 from io import BytesIO
 from unittest.mock import patch
+import os
 
 from flask_api import status
 from lxml import etree
 from lxml.etree import XMLSyntaxError
 
-
 from app.app import (
     generate_vrt_xml,
     liveness_check,
-    get_pid_and_s3_object_key,
+    get_fragment_metadata,
     handle_event,
 )
 from tests.resources import single_premis_event
@@ -20,43 +20,80 @@ from app.helpers.events_parser import InvalidPremisEventException, PremisEvents
 
 
 def test_generate_vrt_xml():
+    # Arrange
     pid = 'a1b2c3'
     object_key = 'an_object_key'
-    xml = generate_vrt_xml(pid, object_key)
+    md5 = 'abcdef123456'
+    bucket = 'a_bucket'
+    # Act
+    xml = generate_vrt_xml(pid, md5, bucket, object_key)
     tree = etree.parse(BytesIO(xml.encode('utf-8')))
-    assert tree.xpath('/m:essenceArchivedEvent/m:pid/text()', namespaces={"m":"http://www.vrt.be/mig/viaa/api"})[0] == pid
-    assert tree.xpath('/m:essenceArchivedEvent/m:file/text()', namespaces={"m":"http://www.vrt.be/mig/viaa/api"})[0] == object_key
+    # Assert
+    ns = {"m":"http://www.vrt.be/mig/viaa/api"}
+    assert tree.xpath('/m:essenceArchivedEvent/m:pid/text()', namespaces=ns)[0] == pid
+    assert tree.xpath('/m:essenceArchivedEvent/m:file/text()', namespaces=ns)[0] == object_key
+    assert tree.xpath('/m:essenceArchivedEvent/m:s3bucket/text()', namespaces=ns)[0] == bucket
+    assert tree.xpath('/m:essenceArchivedEvent/m:md5sum/text()', namespaces=ns)[0] == md5
 
+def test_generate_vrt_xml_against_xsd():
+    # Arrange
+    pid = 'a1b2c3'
+    object_key = 'an_object_key'
+    md5 = 'abcdef123456'
+    bucket = 'a_bucket'
+    xml = generate_vrt_xml(pid, md5, bucket, object_key)
+    xsd_file = os.path.join(os.path.dirname(__file__),'resources','essenceArchivedEvent.xsd')
+    schema = etree.XMLSchema(file=xsd_file)
+    # Act
+    tree = etree.parse(BytesIO(xml.encode('utf-8')))
+    is_xml_valid = schema.validate(tree)
+    # Assert
+    assert is_xml_valid == True
 
 def test_liveness_check():
     assert liveness_check() == ('OK', status.HTTP_200_OK)
 
 
 @patch('app.app.MediahavenService')
-def test_get_pid_and_s3_object_key(mhs_mock):
+def test_get_fragment_metadata(mhs_mock):
     get_fragment_result = {
         "MediaDataList": [
             {
-                "Administrative": {"ExternalId": "pid"},
-                "Dynamic": {"s3_object_key": "s3_object_key"}
+                "Administrative": {
+                    "ExternalId": "pid"
+                },
+                "Dynamic": {
+                    "s3_object_key": "s3_object_key",
+                    "s3_bucket": "s3_bucket",
+                },
+                "Technical": {
+                    "Md5": "md5"
+                }
             }
         ]
     }
     mhs_mock.return_value.get_fragment.return_value = get_fragment_result
-    (pid, s3_object_key) = get_pid_and_s3_object_key('fragment_id')
-    assert pid == "pid"
-    assert s3_object_key == "s3_object_key"
+    metadata = get_fragment_metadata('fragment_id')
+    assert metadata["pid"] == "pid"
+    assert metadata["s3_object_key"] == "s3_object_key"
+    assert metadata["s3_bucket"] == "s3_bucket"
+    assert metadata["md5"] == "md5"
 
 
 @patch('pika.BlockingConnection')
-@patch('app.app.get_pid_and_s3_object_key')
+@patch('app.app.get_fragment_metadata')
 @patch('app.app.request')
-def test_handle_event(post_event_mock, pid_s3_mock, conn_mock):
+def test_handle_event(post_event_mock, get_fragment_metadata_mock, conn_mock):
     # Mock request.data to return a single premis event
     post_event_mock.data = single_premis_event
 
-    # Mock get_pid_and_s3_object_key() to return a pid and s3 object value
-    pid_s3_mock.return_value = ("pid", "s3")
+    # Mock get_fragment_metadata() to return a metadata-dict
+    get_fragment_metadata_mock.return_value = {
+            "pid": "pid",
+            "md5": "md5",
+            "s3_object_key": "s3_object_key",
+            "s3_bucket": "s3_bucket"
+    }
 
     result = handle_event()
     result == ("OK", status.HTTP_200_OK)
