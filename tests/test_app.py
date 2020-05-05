@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+from datetime import datetime
 from io import BytesIO
 from unittest.mock import patch
 import os
@@ -19,36 +20,53 @@ from tests.resources import single_premis_event
 from app.helpers.events_parser import InvalidPremisEventException, PremisEvents
 
 
+def _create_fragment_info_dict(pid: str, md5: str, s3_object_key: str, s3_bucket: str):
+    fragment_info = {
+        "pid": pid,
+        "md5": md5,
+        "s3_object_key": s3_object_key,
+        "s3_bucket": s3_bucket,
+    }
+    return fragment_info
+
+
 def test_generate_vrt_xml():
     # Arrange
     pid = 'a1b2c3'
-    object_key = 'an_object_key'
     md5 = 'abcdef123456'
+    object_key = 'an_object_key'
     bucket = 'a_bucket'
+    fragment_info = _create_fragment_info_dict(pid, md5, object_key, bucket)
+    timestamp = datetime.now().isoformat()
     # Act
-    xml = generate_vrt_xml(pid, md5, bucket, object_key)
+    xml = generate_vrt_xml(fragment_info, timestamp)
     tree = etree.parse(BytesIO(xml.encode('utf-8')))
     # Assert
-    ns = {"m":"http://www.vrt.be/mig/viaa/api"}
+    ns = {"m": "http://www.vrt.be/mig/viaa/api"}
     assert tree.xpath('/m:essenceArchivedEvent/m:pid/text()', namespaces=ns)[0] == pid
     assert tree.xpath('/m:essenceArchivedEvent/m:file/text()', namespaces=ns)[0] == object_key
     assert tree.xpath('/m:essenceArchivedEvent/m:s3bucket/text()', namespaces=ns)[0] == bucket
     assert tree.xpath('/m:essenceArchivedEvent/m:md5sum/text()', namespaces=ns)[0] == md5
+    assert tree.xpath('/m:essenceArchivedEvent/m:timestamp/text()', namespaces=ns)[0] == timestamp
+
 
 def test_generate_vrt_xml_against_xsd():
     # Arrange
     pid = 'a1b2c3'
-    object_key = 'an_object_key'
     md5 = 'abcdef123456'
+    object_key = 'an_object_key'
     bucket = 'a_bucket'
-    xml = generate_vrt_xml(pid, md5, bucket, object_key)
-    xsd_file = os.path.join(os.path.dirname(__file__),'resources','essenceArchivedEvent.xsd')
+    fragment_info = _create_fragment_info_dict(pid, md5, object_key, bucket)
+    timestamp = datetime.now().isoformat()
+    xml = generate_vrt_xml(fragment_info, timestamp)
+    xsd_file = os.path.join(os.path.dirname(__file__), 'resources', 'essenceArchivedEvent.xsd')
     schema = etree.XMLSchema(file=xsd_file)
     # Act
     tree = etree.parse(BytesIO(xml.encode('utf-8')))
     is_xml_valid = schema.validate(tree)
     # Assert
-    assert is_xml_valid == True
+    assert is_xml_valid
+
 
 def test_liveness_check():
     assert liveness_check() == ('OK', status.HTTP_200_OK)
@@ -83,7 +101,21 @@ def test_get_fragment_metadata(mhs_mock):
 @patch('pika.BlockingConnection')
 @patch('app.app.get_fragment_metadata')
 @patch('app.app.request')
-def test_handle_event(post_event_mock, get_fragment_metadata_mock, conn_mock):
+@patch('app.app.config')
+def test_handle_event(config_mock, post_event_mock, get_fragment_metadata_mock, conn_mock):
+    # Mock the config to RabbitMQ
+    config_dict = {
+        "environment": {
+            "rabbit": {
+                "host": "localhost",
+                "queue": "archived",
+                "username": "guest",
+                "password": "guest"
+            }
+        }
+    }
+    config_mock.config = config_dict
+
     # Mock request.data to return a single premis event
     post_event_mock.data = single_premis_event
 
@@ -96,6 +128,27 @@ def test_handle_event(post_event_mock, get_fragment_metadata_mock, conn_mock):
     }
 
     result = handle_event()
+
+    # Mocked publish to RabbitMQ queue
+    basic_publish = conn_mock().channel.return_value.basic_publish.call_args[1]
+
+    # Check if message is being sent to direct queue
+    assert basic_publish["exchange"] == ""
+    assert basic_publish["routing_key"] == "archived"
+
+    # Check if the actual XML message sent to the queue is correct
+    xml = basic_publish["body"]
+    xsd_file = os.path.join(os.path.dirname(__file__), 'resources', 'essenceArchivedEvent.xsd')
+    schema = etree.XMLSchema(file=xsd_file)
+    tree = etree.parse(BytesIO(xml.encode('utf-8')))
+    assert schema.validate(tree)
+
+    ns = {"m": "http://www.vrt.be/mig/viaa/api"}
+    assert tree.xpath('/m:essenceArchivedEvent/m:pid/text()', namespaces=ns)[0] == "pid"
+    assert tree.xpath('/m:essenceArchivedEvent/m:file/text()', namespaces=ns)[0] == "s3_object_key"
+    assert tree.xpath('/m:essenceArchivedEvent/m:s3bucket/text()', namespaces=ns)[0] == "s3_bucket"
+    assert tree.xpath('/m:essenceArchivedEvent/m:md5sum/text()', namespaces=ns)[0] == "md5"
+    assert tree.xpath('/m:essenceArchivedEvent/m:timestamp/text()', namespaces=ns)[0] == "2019-03-30T05:28:40Z"
     result == ("OK", status.HTTP_200_OK)
 
 

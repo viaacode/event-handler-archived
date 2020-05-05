@@ -25,6 +25,7 @@ def test_single_event():
     assert p.events[0].fragment_id == "a1b2c3"
     assert p.events[0].event_type == "FLOW.ARCHIVED"
     assert p.events[0].event_outcome == "NOK"
+    assert p.events[0].event_datetime == "2019-03-30T05:28:40Z"
     assert p.events[0].is_valid
 
 def test_multi_event():
@@ -36,12 +37,14 @@ def test_multi_event():
     assert p.events[0].fragment_id == "a1b2c3"
     assert p.events[0].event_type == "EXPORT"
     assert p.events[0].event_outcome == "OK"
+    assert p.events[0].event_datetime == "2020-03-30T05:28:40Z"
     assert not p.events[0].is_valid
     assert p.events[1].event_id == "333"
     assert p.events[1].event_detail == "Ionic Defibulizer"
     assert p.events[1].fragment_id == "d4e5f6"
     assert p.events[1].event_type == "FLOW.ARCHIVED"
     assert p.events[1].event_outcome == "OK"
+    assert p.events[1].event_datetime == "2019-03-30T05:28:40Z"
     assert p.events[1].is_valid
 
 def test_invalid_premis_event():
