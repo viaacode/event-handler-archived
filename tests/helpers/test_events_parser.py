@@ -30,8 +30,7 @@ def test_single_event():
 
 def test_multi_event():
     p = PremisEvents(multi_premis_event)
-    assert len(p.events) == 2
-    #
+    assert len(p.events) == 3
     assert p.events[0].event_id == "222"
     assert p.events[0].event_detail == "Ionic Defibulizer Plus"
     assert p.events[0].fragment_id == "a1b2c3"
@@ -46,6 +45,13 @@ def test_multi_event():
     assert p.events[1].event_outcome == "OK"
     assert p.events[1].event_datetime == "2019-03-30T05:28:40Z"
     assert p.events[1].is_valid
+    assert p.events[2].event_id == "444"
+    assert p.events[2].event_detail == "Ionic Defibulizer 2"
+    assert p.events[2].fragment_id == "g7h8j9"
+    assert p.events[2].event_type == "RECORDS.FLOW.ARCHIVED"
+    assert p.events[2].event_outcome == "OK"
+    assert p.events[2].event_datetime == "2019-03-30T05:28:40Z"
+    assert p.events[2].is_valid
 
 def test_invalid_premis_event():
     with pytest.raises(InvalidPremisEventException) as e:

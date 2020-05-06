@@ -48,4 +48,28 @@
       <premis:linkingObjectIdentifierValue>c3</premis:linkingObjectIdentifierValue>
     </premis:linkingObjectIdentifier>
   </premis:event>
+  <premis:event xmlns:premis="info:lc/xmlns/premis-v2">
+    <premis:eventIdentifier>
+      <premis:eventIdentifierType>MEDIAHAVEN_EVENT</premis:eventIdentifierType>
+      <premis:eventIdentifierValue>444</premis:eventIdentifierValue>
+    </premis:eventIdentifier>
+    <premis:eventType>RECORDS.FLOW.ARCHIVED</premis:eventType>
+    <premis:eventDateTime>2019-03-30T05:28:40Z</premis:eventDateTime>
+    <premis:eventDetail>Ionic Defibulizer 2</premis:eventDetail>
+    <premis:eventOutcomeInformation>
+      <premis:eventOutcome>OK</premis:eventOutcome>
+    </premis:eventOutcomeInformation>
+    <premis:linkingAgentIdentifier>
+      <premis:linkingAgentIdentifierType>MEDIAHAVEN_USER</premis:linkingAgentIdentifierType>
+      <premis:linkingAgentIdentifierValue>703a53d2-dc66-4eb2-ab7f-73d5fd228852</premis:linkingAgentIdentifierValue>
+    </premis:linkingAgentIdentifier>
+    <premis:linkingObjectIdentifier>
+      <premis:linkingObjectIdentifierType>MEDIAHAVEN_ID</premis:linkingObjectIdentifierType>
+      <premis:linkingObjectIdentifierValue>g7h8j9</premis:linkingObjectIdentifierValue>
+    </premis:linkingObjectIdentifier>
+    <premis:linkingObjectIdentifier>
+      <premis:linkingObjectIdentifierType>EXTERNAL_ID</premis:linkingObjectIdentifierType>
+      <premis:linkingObjectIdentifierValue>d4</premis:linkingObjectIdentifierValue>
+    </premis:linkingObjectIdentifier>
+  </premis:event>
 </events>
