@@ -6,7 +6,7 @@ from lxml import etree
 
 # Constants
 PREMIS_NAMESPACE = "info:lc/xmlns/premis-v2"
-VALID_EVENT_TYPES = ["FLOW.ARCHIVED"]
+VALID_EVENT_TYPES = ["FLOW.ARCHIVED", "RECORDS.FLOW.ARCHIVED"]
 
 
 class InvalidPremisEventException(Exception):
