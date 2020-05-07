@@ -75,20 +75,16 @@ def test_liveness_check():
 @patch('app.app.MediahavenService')
 def test_get_fragment_metadata(mhs_mock):
     get_fragment_result = {
-        "MediaDataList": [
-            {
-                "Administrative": {
-                    "ExternalId": "pid"
-                },
-                "Dynamic": {
-                    "s3_object_key": "s3_object_key",
-                    "s3_bucket": "s3_bucket",
-                },
-                "Technical": {
-                    "Md5": "md5"
-                }
-            }
-        ]
+        "Administrative": {
+            "ExternalId": "pid"
+        },
+        "Dynamic": {
+            "s3_object_key": "s3_object_key",
+            "s3_bucket": "s3_bucket",
+        },
+        "Technical": {
+            "Md5": "md5"
+        }
     }
     mhs_mock.return_value.get_fragment.return_value = get_fragment_result
     metadata = get_fragment_metadata('fragment_id')

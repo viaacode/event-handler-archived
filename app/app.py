@@ -44,10 +44,10 @@ def get_fragment_metadata(fragment_id: str) -> Dict[str, str]:
     mediahaven_client = MediahavenService(config.config)
     fragment = mediahaven_client.get_fragment(fragment_id)
     try:
-        pid: str = fragment["MediaDataList"][0]["Administrative"]["ExternalId"]
-        s3_object_key: str = fragment["MediaDataList"][0]["Dynamic"]["s3_object_key"]
-        s3_bucket: str = fragment["MediaDataList"][0]["Dynamic"]["s3_bucket"]
-        md5: str = fragment["MediaDataList"][0]["Technical"]["Md5"]
+        pid: str = fragment["Administrative"]["ExternalId"]
+        s3_object_key: str = fragment["Dynamic"]["s3_object_key"]
+        s3_bucket: str = fragment["Dynamic"]["s3_bucket"]
+        md5: str = fragment["Technical"]["Md5"]
     except KeyError as error:
         log.warning(
             f"{error} is not found in the mediahaven object.",
