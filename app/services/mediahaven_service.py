@@ -58,19 +58,14 @@ class MediahavenService:
 
     @__authenticate
     def get_fragment(self, fragment_id: str) -> dict:
-        url: str = (self.cfg["environment"]["mediahaven"]["host"] + "/media/")
+        url: str = (f'{self.cfg["environment"]["mediahaven"]["host"]}/media/{fragment_id}')
 
         headers: dict = {
             "Authorization": f"Bearer {self.token_info['access_token']}",
             "Accept": "application/vnd.mediahaven.v2+json",
         }
 
-        params: dict = {
-            "q": f'%2b(fragmentId:"{fragment_id}")',
-            "nrOfResults": 1,
-        }
-
-        response = requests.get(url, headers=headers, params=params,)
+        response = requests.get(url, headers=headers,)
 
         if response.status_code == 401:
             # AuthenticationException triggers a retry with a new token
