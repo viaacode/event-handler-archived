@@ -8,6 +8,11 @@ import requests
 from requests.auth import HTTPBasicAuth
 from requests.exceptions import RequestException
 
+class MediaObjectNotFoundException(Exception):
+    """Exception raised when MediaHaven doesn't find a media object given the ID."""
+
+    pass
+
 
 class AuthenticationException(Exception):
     """Exception raised when authentication fails."""
@@ -70,5 +75,8 @@ class MediahavenService:
         if response.status_code == 401:
             # AuthenticationException triggers a retry with a new token
             raise AuthenticationException(response.text)
+
+        if response.status_code in (400, 404):
+            raise MediaObjectNotFoundException(response.json())
 
         return response.json()
