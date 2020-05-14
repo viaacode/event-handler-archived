@@ -15,26 +15,28 @@ class RabbitService(object):
     def __init__(self, config: dict = None, ctx=None):
         self.context = ctx
         self.name = "RabbitMQ Service"
-        self.config = config
         self.retrycount = 1
+        self.host = config["environment"]["rabbit"]["host"]
+        self.queue = config["environment"]["rabbit"]["queue"]
+        self.exchange = config["environment"]["rabbit"]["exchange"]
+        credentials = PlainCredentials(
+            config["environment"]["rabbit"]["username"],
+            config["environment"]["rabbit"]["password"],
+        )
+        self.connection_params = pika.ConnectionParameters(
+            host=self.host, credentials=credentials,
+        )
 
     def publish_message(self, message: str) -> bool:
         """
         Publishes a message to the queue set in the config.
-        
+
         Arguments:
             message {str} -- Message to be posted.
         """
 
-        credentials = PlainCredentials(
-            self.config["environment"]["rabbit"]["username"],
-            self.config["environment"]["rabbit"]["password"],
-        )
-        connection_params = pika.ConnectionParameters(
-            host=self.config["environment"]["rabbit"]["host"], credentials=credentials,
-        )
         try:
-            connection = pika.BlockingConnection(connection_params)
+            connection = pika.BlockingConnection(self.connection_params)
         except Exception as error:
             logger.critical(
                 f"Cannot connect to RabbitMq {error}", retry=self.retrycount
@@ -51,12 +53,17 @@ class RabbitService(object):
             return False
 
         channel = connection.channel()
-        channel.queue_declare(
-            queue=self.config["environment"]["rabbit"]["queue"], durable=True
+
+        # Declare queue, exchange and bind the queue to the exchange
+        channel.queue_declare(queue=self.queue, durable=True)
+        channel.exchange_declare(exchange=self.exchange, exchange_type="direct")
+        channel.queue_bind(
+            exchange=self.exchange, queue=self.queue, routing_key=self.queue
         )
+
         channel.basic_publish(
-            exchange="",
-            routing_key=self.config["environment"]["rabbit"]["queue"],
+            exchange=self.exchange,
+            routing_key=self.queue,
             body=message,
             properties=pika.BasicProperties(delivery_mode=2,),
         )

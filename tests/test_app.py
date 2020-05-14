@@ -105,6 +105,7 @@ def test_handle_event(config_mock, post_event_mock, get_fragment_metadata_mock, 
             "rabbit": {
                 "host": "localhost",
                 "queue": "archived",
+                "exchange": "exchange",
                 "username": "guest",
                 "password": "guest"
             }
@@ -128,8 +129,8 @@ def test_handle_event(config_mock, post_event_mock, get_fragment_metadata_mock, 
     # Mocked publish to RabbitMQ queue
     basic_publish = conn_mock().channel.return_value.basic_publish.call_args[1]
 
-    # Check if message is being sent to direct queue
-    assert basic_publish["exchange"] == ""
+    # Check if message is being sent via routing
+    assert basic_publish["exchange"] == "exchange"
     assert basic_publish["routing_key"] == "archived"
 
     # Check if the actual XML message sent to the queue is correct

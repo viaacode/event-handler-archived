@@ -6,12 +6,15 @@ class Channel:
     """Mocks a pika Channel"""
 
     def __init__(self):
+        self.exchanges = {}
         self.queues = {}
 
     def basic_publish(self, *args, **kwargs):
-        """Puts a message on the in-memory list"""
+        """Puts a message on the in-memory list via the exchange"""
 
-        self.queues[kwargs["routing_key"]].append(kwargs["body"])
+        exchange = kwargs["exchange"]
+        routing_key = kwargs["routing_key"]
+        self.exchanges[exchange][routing_key].append(kwargs["body"])
 
     def queue_declare(self, *args, **kwargs):
         """Creates an in-memory list to act as queue"""
@@ -19,6 +22,20 @@ class Channel:
         queue = kwargs["queue"]
         if not self.queues.get(queue):
             self.queues[queue] = []
+
+    def exchange_declare(self, *args, **kwargs):
+        """Create an in memory dict to act as an exchange"""
+
+        exchanges = kwargs["exchange"]
+        if not self.exchanges.get(exchanges):
+            self.exchanges[exchanges] = {}
+
+    def queue_bind(self, *args, **kwargs):
+        """Map the queue to the exchange"""
+
+        exchange = kwargs["exchange"]
+        queue = kwargs["queue"]
+        self.exchanges[exchange][queue] = self.queues[queue]
 
 
 class Connection:

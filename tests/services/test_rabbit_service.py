@@ -15,6 +15,7 @@ class TestRabbitService:
             "rabbit": {
                 "host": "localhost",
                 "queue": "archived",
+                "exchange": "exchange",
                 "username": "guest",
                 "password": "guest"
             }
@@ -32,7 +33,8 @@ class TestRabbitService:
         conn_mock.return_value = pika_conn
 
         rabbit_service.publish_message('message')
-        messages = pika_conn.channel_mock.queues["archived"]
+        exchange = pika_conn.channel_mock.exchanges["exchange"]
+        messages = exchange["archived"]
         assert len(messages) == 1
         assert messages[0] == 'message'
 
