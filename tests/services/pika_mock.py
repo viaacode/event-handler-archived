@@ -28,8 +28,12 @@ class Channel:
 
         exchange = kwargs["exchange"]
         exchange_type = kwargs["exchange_type"]
+        durable = kwargs["durable"]
         if not self.exchanges.get(exchange):
-            self.exchanges[exchange] = {"exchange_type": exchange_type}
+            self.exchanges[exchange] = {
+                "exchange_type": exchange_type,
+                "durable": durable,
+                }
 
     def queue_bind(self, *args, **kwargs):
         """Map the queue to the exchange"""
