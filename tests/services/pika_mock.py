@@ -26,9 +26,10 @@ class Channel:
     def exchange_declare(self, *args, **kwargs):
         """Create an in memory dict to act as an exchange"""
 
-        exchanges = kwargs["exchange"]
-        if not self.exchanges.get(exchanges):
-            self.exchanges[exchanges] = {}
+        exchange = kwargs["exchange"]
+        exchange_type = kwargs["exchange_type"]
+        if not self.exchanges.get(exchange):
+            self.exchanges[exchange] = {"exchange_type": exchange_type}
 
     def queue_bind(self, *args, **kwargs):
         """Map the queue to the exchange"""
