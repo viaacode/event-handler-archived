@@ -18,6 +18,7 @@ from app.app import (
 )
 from tests.resources import single_premis_event
 from app.helpers.events_parser import InvalidPremisEventException, PremisEvents
+from app.services.mediahaven_service import MediaObjectNotFoundException
 
 
 def _create_fragment_info_dict(pid: str, md5: str, s3_object_key: str, s3_bucket: str):
@@ -94,6 +95,29 @@ def test_get_fragment_metadata(mhs_mock):
     assert metadata["md5"] == "md5"
 
 
+@patch('app.app.MediahavenService')
+def test_get_fragment_metadata_key_not_found(mhs_mock):
+    # Mock call to MediaHaven to return insufficient information
+    get_fragment_result = {
+        "Administrative": {
+            "ExternalId": "pid"
+        }
+    }
+    mhs_mock.return_value.get_fragment.return_value = get_fragment_result
+
+    metadata = get_fragment_metadata('fragment_id')
+    assert metadata == {}
+
+
+@patch('app.app.MediahavenService')
+def test_get_fragment_metadata_media_not_found(mhs_mock):
+    # Mock call to MediaHaven to raise A MediaObjectNotFoundException
+    mhs_mock.return_value.get_fragment.side_effect = MediaObjectNotFoundException("denied")
+    
+    metadata = get_fragment_metadata('fragment_id')
+    assert metadata == {}
+
+
 @patch('pika.BlockingConnection')
 @patch('app.app.get_fragment_metadata')
 @patch('app.app.request')
@@ -146,7 +170,7 @@ def test_handle_event(config_mock, post_event_mock, get_fragment_metadata_mock, 
     assert tree.xpath('/m:essenceArchivedEvent/m:s3bucket/text()', namespaces=ns)[0] == "s3_bucket"
     assert tree.xpath('/m:essenceArchivedEvent/m:md5sum/text()', namespaces=ns)[0] == "md5"
     assert tree.xpath('/m:essenceArchivedEvent/m:timestamp/text()', namespaces=ns)[0] == "2019-03-30T05:28:40Z"
-    result == ("OK", status.HTTP_200_OK)
+    assert result == ("OK", status.HTTP_200_OK)
 
 
 @patch('app.app.request')
@@ -156,7 +180,7 @@ def test_handle_event_xml_error(premis_events_mock, post_event_mock,):
     post_event_mock.data = ''
 
     result = handle_event()
-    result[1] == status.HTTP_400_BAD_REQUEST
+    assert result[1] == status.HTTP_400_BAD_REQUEST
 
 
 @patch('app.app.request')
@@ -166,4 +190,21 @@ def test_handle_event_invalid_premis_event(premis_events_mock, post_event_mock):
     post_event_mock.data = ''
 
     result = handle_event()
-    result[1] == status.HTTP_400_BAD_REQUEST
+    assert result[1] == status.HTTP_400_BAD_REQUEST
+
+
+@patch('pika.BlockingConnection')
+@patch('app.app.get_fragment_metadata')
+@patch('app.app.request')
+def test_handle_event_empty_fragment(post_event_mock, get_fragment_metadata_mock, conn_mock):
+    # Mock request.data to return a single premis event
+    post_event_mock.data = single_premis_event
+    # Mock get_fragment_metadata() to return an empty-dict
+    get_fragment_metadata_mock.return_value = {}
+
+    result = handle_event()
+
+    # Check if there is no message been sent to the queue
+    assert conn_mock().call_count == 0
+    # Should still return "200"
+    assert result == ("OK", status.HTTP_200_OK)

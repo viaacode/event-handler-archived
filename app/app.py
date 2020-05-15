@@ -17,7 +17,7 @@ from viaa.observability import correlation, logging
 
 from .helpers.xml_helper import XMLBuilder
 from .helpers.events_parser import PremisEvents, InvalidPremisEventException
-from .services.mediahaven_service import MediahavenService
+from .services.mediahaven_service import MediahavenService, MediaObjectNotFoundException
 from .services.rabbit_service import RabbitService
 
 app = Flask(__name__)
@@ -28,21 +28,28 @@ correlation.initialize(flask=app, logger=log, pika=pika, requests=requests)
 
 def get_fragment_metadata(fragment_id: str) -> Dict[str, str]:
     """
-    Query Mediahaven for the given fragment id.
-    Return the pid, md5, s3 object key and s3 bucket if available, otherwise returns empty strings.
+    Query MediaHaven for the given fragment ID.
+    Return the pid, md5, s3 object key and s3 bucket as a dictionary.
+    Return empty dictionary if the information is not found or not complete
+    for the given ID.
     
     Arguments:
-        fragment_id {str} -- Fragment id for which the pid and s3 object key needs to be found. 
-    
-    Raises:
-        KeyError: Raised when no fragment is found or it lacks and s3 object key.
-    
+        fragment_id {str} -- Fragment ID for which the information is fetched.
+
     Returns:
-        Dict[str, str] -- Dictionary containing the retrieved metadata
+        Dict[str, str] -- Dictionary containing the retrieved metadata.
     """
 
     mediahaven_client = MediahavenService(config.config)
-    fragment = mediahaven_client.get_fragment(fragment_id)
+    try:
+        fragment = mediahaven_client.get_fragment(fragment_id)
+    except MediaObjectNotFoundException as error:
+        log.error(
+            f"MediaHaven object not found for ID: {fragment_id}",
+            mediahaven_response=f"{error}"
+        )
+        return {}
+
     try:
         pid: str = fragment["Administrative"]["ExternalId"]
         s3_object_key: str = fragment["Dynamic"]["s3_object_key"]
@@ -50,11 +57,12 @@ def get_fragment_metadata(fragment_id: str) -> Dict[str, str]:
         md5: str = fragment["Technical"]["Md5"]
     except KeyError as error:
         log.warning(
-            f"{error} is not found in the mediahaven object.",
+            f"{error} is not found in the MediaHaven object.",
             fragment_id=fragment_id,
             fragment=fragment,
         )
-        pid, md5, s3_object_key, s3_bucket = "", "", "", ""
+        return {}
+
     return {
         "pid": pid,
         "md5": md5,
@@ -114,22 +122,24 @@ def handle_event() -> str:
         log.debug(
             f"event_type: {event.event_type} / fragment_id: {event.fragment_id} / external_id: {event.external_id}"
         )
-        # is_valid means we have a FragmentID and a "FLOW.ARCHIVED" eventType
+        # is_valid means we have a FragmentID and a "(RECORDS).FLOW.ARCHIVED" eventType
         if event.is_valid:
             fragment_info = get_fragment_metadata(event.fragment_id)
-            message = generate_vrt_xml(
-                fragment_info,
-                event.event_datetime,
-            )
-            RabbitService(config=config.config).publish_message(message)
-            log.info(
-                f"essenceArchivedEvent sent for {event.external_id}.",
-                mediahaven_event=event.event_type,
-                fragment_id=event.fragment_id,
-                pid=event.external_id,
-                s3_bucket=fragment_info["s3_bucket"],
-                s3_object_key=fragment_info["s3_object_key"],
-            )
+            if fragment_info:
+                message = generate_vrt_xml(
+                    fragment_info,
+                    event.event_datetime,
+                )
+
+                RabbitService(config=config.config).publish_message(message)
+                log.info(
+                    f"essenceArchivedEvent sent for {event.external_id}.",
+                    mediahaven_event=event.event_type,
+                    fragment_id=event.fragment_id,
+                    pid=event.external_id,
+                    s3_bucket=fragment_info["s3_bucket"],
+                    s3_object_key=fragment_info["s3_object_key"],
+                )
         else:
             log.debug(f"Dropping event -> ID:{event.event_id}, type:{event.event_type}")
     return "OK", status.HTTP_200_OK
