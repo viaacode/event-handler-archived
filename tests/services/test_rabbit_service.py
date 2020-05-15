@@ -34,6 +34,7 @@ class TestRabbitService:
 
         rabbit_service.publish_message('message')
         exchange = pika_conn.channel_mock.exchanges["exchange"]
+        assert exchange["exchange_type"] == 'topic'
         messages = exchange["archived"]
         assert len(messages) == 1
         assert messages[0] == 'message'
