@@ -56,7 +56,9 @@ class RabbitService(object):
 
         # Declare queue, exchange and bind the queue to the exchange
         channel.queue_declare(queue=self.queue, durable=True)
-        channel.exchange_declare(exchange=self.exchange, exchange_type="topic")
+        channel.exchange_declare(
+            exchange=self.exchange, exchange_type="topic", durable=True
+        )
         channel.queue_bind(
             exchange=self.exchange, queue=self.queue, routing_key=self.queue
         )
