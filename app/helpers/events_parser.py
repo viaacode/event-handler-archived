@@ -63,10 +63,14 @@ class PremisEvent:
         )[0].text
 
     def _get_external_id(self) -> str:
-        return self.xml_element.xpath(
-            "./p:linkingObjectIdentifier[p:linkingObjectIdentifierType='EXTERNAL_ID']/p:linkingObjectIdentifierValue",
-            namespaces={"p": PREMIS_NAMESPACE},
-        )[0].text
+        """Parses and returns the EXTERNAL_ID, if absent return an empty string"""
+        try:
+            return self.xml_element.xpath(
+                "./p:linkingObjectIdentifier[p:linkingObjectIdentifierType='EXTERNAL_ID']/p:linkingObjectIdentifierValue",
+                namespaces={"p": PREMIS_NAMESPACE},
+            )[0].text
+        except IndexError:
+            return ""
 
     def _is_valid(self):
         """A PremisEvent is valid only if:
