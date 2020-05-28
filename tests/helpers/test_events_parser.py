@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import pytest
-from lxml.etree import XMLSyntaxError
+from lxml.etree import XMLSyntaxError, fromstring as parse_xml_string
 
 from tests.resources import (
         single_premis_event,
@@ -12,6 +12,7 @@ from tests.resources import (
         single_event_no_external_id
 )
 from app.helpers.events_parser import (
+    PremisEvent,
     PremisEvents,
     InvalidPremisEventException,
 )
@@ -66,3 +67,10 @@ def test_invalid_xml_event():
 def test_single_event_no_external_id():
     p = PremisEvents(single_event_no_external_id)
     assert p.events[0].external_id == ""
+
+def test_get_xpath_from_event():
+    input_xml = "<xml><path>value</path></xml>"
+    tree = parse_xml_string(input_xml)
+    p = PremisEvent(tree)
+    assert p._get_xpath_from_event("no_such_path") == ""
+    assert p._get_xpath_from_event("path") == "value"
