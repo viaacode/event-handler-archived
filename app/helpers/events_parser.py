@@ -18,55 +18,35 @@ class InvalidPremisEventException(Exception):
 class PremisEvent:
     """Convenience class for a single XML Premis Event"""
 
+    XPATHS = {
+        "event_type": "./p:eventType",
+        "event_datetime":"./p:eventDateTime",
+        "event_detail": "./p:eventDetail",
+        "event_id": "./p:eventIdentifier[p:eventIdentifierType='MEDIAHAVEN_EVENT']/p:eventIdentifierValue",
+        "event_outcome": "./p:eventOutcomeInformation/p:eventOutcome",
+        "fragment_id": "./p:linkingObjectIdentifier[p:linkingObjectIdentifierType='MEDIAHAVEN_ID']/p:linkingObjectIdentifierValue",
+        "external_id": "./p:linkingObjectIdentifier[p:linkingObjectIdentifierType='EXTERNAL_ID']/p:linkingObjectIdentifierValue",
+    }
+
     def __init__(self, element):
         self.xml_element = element
-        self.event_type: str = self._get_event_type()
-        self.event_datetime: str = self._get_event_datetime()
-        self.event_detail: str = self._get_event_detail()
-        self.event_id: str = self._get_event_id()
-        self.event_outcome: str = self._get_event_outcome()
-        self.fragment_id: str = self._get_fragment_id()
-        self.external_id: str = self._get_external_id()
+        self.event_type: str = self._get_xpath_from_event(self.XPATHS["event_type"])
+        self.event_datetime: str = self._get_xpath_from_event(self.XPATHS["event_datetime"])
+        self.event_detail: str = self._get_xpath_from_event(self.XPATHS["event_detail"])
+        self.event_id: str = self._get_xpath_from_event(self.XPATHS["event_id"])
+        self.event_outcome: str = self._get_xpath_from_event(self.XPATHS["event_outcome"])
+        self.fragment_id: str = self._get_xpath_from_event(self.XPATHS["fragment_id"])
+        self.external_id: str = self._get_xpath_from_event(self.XPATHS["external_id"])
         self.is_valid: bool = self._is_valid()
 
-    def _get_event_type(self) -> str:
-        return self.xml_element.xpath(
-            "./p:eventType", namespaces={"p": PREMIS_NAMESPACE}
-        )[0].text
-
-    def _get_event_datetime(self) -> str:
-        return self.xml_element.xpath(
-            "./p:eventDateTime", namespaces={"p": PREMIS_NAMESPACE}
-        )[0].text
-
-    def _get_event_detail(self) -> str:
-        return self.xml_element.xpath(
-            "./p:eventDetail", namespaces={"p": PREMIS_NAMESPACE}
-        )[0].text
-
-    def _get_event_id(self) -> str:
-        return self.xml_element.xpath(
-            "./p:eventIdentifier[p:eventIdentifierType='MEDIAHAVEN_EVENT']/p:eventIdentifierValue",
-            namespaces={"p": PREMIS_NAMESPACE},
-        )[0].text
-
-    def _get_event_outcome(self) -> str:
-        return self.xml_element.xpath(
-            "./p:eventOutcomeInformation/p:eventOutcome",
-            namespaces={"p": PREMIS_NAMESPACE},
-        )[0].text
-
-    def _get_fragment_id(self) -> str:
-        return self.xml_element.xpath(
-            "./p:linkingObjectIdentifier[p:linkingObjectIdentifierType='MEDIAHAVEN_ID']/p:linkingObjectIdentifierValue",
-            namespaces={"p": PREMIS_NAMESPACE},
-        )[0].text
-
-    def _get_external_id(self) -> str:
-        return self.xml_element.xpath(
-            "./p:linkingObjectIdentifier[p:linkingObjectIdentifierType='EXTERNAL_ID']/p:linkingObjectIdentifierValue",
-            namespaces={"p": PREMIS_NAMESPACE},
-        )[0].text
+    def _get_xpath_from_event(self, xpath) -> str:
+        """Parses based on an xpath, returns empty string if absent"""
+        try:
+            return self.xml_element.xpath(
+                xpath, namespaces={"p": PREMIS_NAMESPACE}
+            )[0].text
+        except IndexError:
+            return ""
 
     def _is_valid(self):
         """A PremisEvent is valid only if:
@@ -77,9 +57,6 @@ class PremisEvent:
             self.fragment_id):
             return True
         return False
-
-    def to_string(self, pretty=False) -> str:
-        return etree.tostring(events[0], pretty_print=pretty).decode("utf-8")
 
 
 class PremisEvents:
