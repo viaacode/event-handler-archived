@@ -1,17 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from datetime import datetime
-from io import BytesIO
-from typing import Optional, Tuple, Dict
+from typing import Dict
 
 import pika
 import requests
-from flask import Flask, escape, request
+from flask import Flask, request
 from flask_api import status
-from lxml import etree
 from lxml.etree import XMLSyntaxError
-from requests.exceptions import RequestException
 from viaa.configuration import ConfigParser
 from viaa.observability import correlation, logging
 
