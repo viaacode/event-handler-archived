@@ -6,6 +6,7 @@ from io import BytesIO
 from unittest.mock import patch
 import os
 
+import pytest
 from flask_api import status
 from lxml import etree
 from lxml.etree import XMLSyntaxError
@@ -16,7 +17,7 @@ from app.app import (
     get_fragment_metadata,
     handle_event,
 )
-from tests.resources import single_premis_event
+from tests.resources import single_premis_event, single_premis_event_nok
 from app.helpers.events_parser import InvalidPremisEventException, PremisEvents
 from app.services.mediahaven_service import MediaObjectNotFoundException
 
@@ -117,12 +118,8 @@ def test_get_fragment_metadata_media_not_found(mhs_mock):
     metadata = get_fragment_metadata('fragment_id')
     assert metadata == {}
 
-
-@patch('pika.BlockingConnection')
-@patch('app.app.get_fragment_metadata')
-@patch('app.app.request')
-@patch('app.app.config')
-def test_handle_event(config_mock, post_event_mock, get_fragment_metadata_mock, conn_mock):
+@pytest.fixture
+def config_dict_rabbit():
     # Mock the config to RabbitMQ
     config_dict = {
         "environment": {
@@ -135,8 +132,23 @@ def test_handle_event(config_mock, post_event_mock, get_fragment_metadata_mock, 
             }
         }
     }
-    config_mock.config = config_dict
+    return config_dict
 
+
+@patch('pika.BlockingConnection')
+@patch('app.app.get_fragment_metadata')
+@patch('app.app.request')
+@patch('app.app.config')
+def test_handle_event(
+    config_mock,
+    post_event_mock,
+    get_fragment_metadata_mock,
+    conn_mock,
+    config_dict_rabbit
+):
+    # Mock the config to RabbitMQ
+    config_mock.config = config_dict_rabbit
+    
     # Mock request.data to return a single premis event
     post_event_mock.data = single_premis_event
 
@@ -170,6 +182,34 @@ def test_handle_event(config_mock, post_event_mock, get_fragment_metadata_mock, 
     assert tree.xpath('/m:essenceArchivedEvent/m:s3bucket/text()', namespaces=ns)[0] == "s3_bucket"
     assert tree.xpath('/m:essenceArchivedEvent/m:md5sum/text()', namespaces=ns)[0] == "md5"
     assert tree.xpath('/m:essenceArchivedEvent/m:timestamp/text()', namespaces=ns)[0] == "2019-03-30T05:28:40Z"
+    assert result == ("OK", status.HTTP_200_OK)
+
+
+@patch('pika.BlockingConnection')
+@patch('app.app.get_fragment_metadata')
+@patch('app.app.request')
+@patch('app.app.config')
+def test_handle_event_outcome_nok(
+    config_mock,
+    post_event_mock,
+    get_fragment_metadata_mock,
+    conn_mock,
+    config_dict_rabbit
+):
+    # Mock the config to RabbitMQ
+    config_mock.config = config_dict_rabbit
+
+    # Mock request.data to return a single premis event with outcome "NOK"
+    post_event_mock.data = single_premis_event_nok
+
+    # Mock get_fragment_metadata() to return a metadata-dict
+    get_fragment_metadata_mock.return_value = {}
+
+    result = handle_event()
+
+    # Check if there is no message been sent to the queue
+    assert conn_mock().call_count == 0
+    # Should still return "200"
     assert result == ("OK", status.HTTP_200_OK)
 
 

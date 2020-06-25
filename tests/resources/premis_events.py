@@ -5,17 +5,14 @@ import os
 
 folder = os.path.join(os.getcwd(), 'tests', 'resources')
 
-with open(os.path.join(folder, 'single_premis_event.xml'), 'rb') as f:
-    single_premis_event = f.read()
+def _load_resource(filename):
+    with open(os.path.join(folder, filename), 'rb') as f:
+        contents = f.read()
+    return contents
 
-with open(os.path.join(folder, 'multi_premis_event.xml'), 'rb') as f:
-    multi_premis_event = f.read()
-
-with open(os.path.join(folder, 'invalid_premis_event.xml'), 'rb') as f:
-    invalid_premis_event = f.read()
-
-with open(os.path.join(folder, 'invalid_xml_event.xml'), 'rb') as f:
-    invalid_xml_event = f.read()
-
-with open(os.path.join(folder, 'single_event_no_external_id.xml'), 'rb') as f:
-    single_event_no_external_id = f.read()
+single_premis_event = _load_resource('single_premis_event.xml')
+single_premis_event_nok = _load_resource('single_premis_event_nok.xml')
+multi_premis_event = _load_resource('multi_premis_event.xml')
+invalid_premis_event = _load_resource('invalid_premis_event.xml')
+invalid_xml_event = _load_resource('invalid_xml_event.xml')
+single_event_no_external_id = _load_resource('single_event_no_external_id.xml')

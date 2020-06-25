@@ -12,7 +12,11 @@ from viaa.configuration import ConfigParser
 from viaa.observability import correlation, logging
 
 from .helpers.xml_helper import XMLBuilder
-from .helpers.events_parser import PremisEvents, InvalidPremisEventException
+from .helpers.events_parser import (
+    PremisEvent,
+    PremisEvents,
+    InvalidPremisEventException
+)
 from .services.mediahaven_service import MediahavenService, MediaObjectNotFoundException
 from .services.rabbit_service import RabbitService
 
@@ -28,7 +32,7 @@ def get_fragment_metadata(fragment_id: str) -> Dict[str, str]:
     Return the pid, md5, s3 object key and s3 bucket as a dictionary.
     Return empty dictionary if the information is not found or not complete
     for the given ID.
-    
+
     Arguments:
         fragment_id {str} -- Fragment ID for which the information is fetched.
 
@@ -115,11 +119,34 @@ def handle_event() -> str:
 
     log.debug(f"Events in payload: {len(premis_events.events)}")
     for event in premis_events.events:
-        log.debug(
+        _handle_premis_event(event)
+
+    return "OK", status.HTTP_200_OK
+
+
+def _handle_premis_event(event: PremisEvent):
+    """Handle a premis event
+
+    A premis event needs to be valid or it will be dropped. Valid means of type archived
+    and the event should have a fragment ID.
+
+    The premis event should also have an outcome that is considered successful. If that
+    is not the case e.g. "NOK", then the event should not be processed.
+
+    Then we'll query MediaHaven to request more information of the media object. This
+    information will be packaged as an essenceArchivedEvent and be sent on the queue
+    to VRT noticing them the item has been archived successfully.
+
+    Arguments:
+        event {PremisEvent} -- Premis event to handle
+    """
+    log.debug(
             f"event_type: {event.event_type} / fragment_id: {event.fragment_id} / external_id: {event.external_id}"
         )
-        # is_valid means we have a FragmentID and a "(RECORDS).FLOW.ARCHIVED" eventType
-        if event.is_valid:
+    # is_valid means we have a FragmentID and a "(RECORDS).FLOW.ARCHIVED" eventType
+    if event.is_valid:
+        # If the outcome of the premis event is not "OK" it should not process the event
+        if event.has_valid_outcome:
             fragment_info = get_fragment_metadata(event.fragment_id)
             if fragment_info:
                 message = generate_vrt_xml(
@@ -137,5 +164,10 @@ def handle_event() -> str:
                     s3_object_key=fragment_info["s3_object_key"],
                 )
         else:
-            log.debug(f"Dropping event -> ID:{event.event_id}, type:{event.event_type}")
-    return "OK", status.HTTP_200_OK
+            log.warning(
+                f"Archived event has status: {event.event_outcome} for fragment ID: {event.fragment_id}.",
+                fragment_id=event.fragment_id,
+                pid=event.external_id
+            )
+    else:
+        log.debug(f"Dropping event -> ID:{event.event_id}, type:{event.event_type}")
