@@ -7,7 +7,7 @@ from lxml import etree
 # Constants
 PREMIS_NAMESPACE = "info:lc/xmlns/premis-v2"
 VALID_EVENT_TYPES = ["FLOW.ARCHIVED", "RECORDS.FLOW.ARCHIVED"]
-
+VALID_OUTCOME = "OK"
 
 class InvalidPremisEventException(Exception):
     """Valid XML but not a Premis event"""
@@ -38,6 +38,7 @@ class PremisEvent:
         self.fragment_id: str = self._get_xpath_from_event(self.XPATHS["fragment_id"])
         self.external_id: str = self._get_xpath_from_event(self.XPATHS["external_id"])
         self.is_valid: bool = self._is_valid()
+        self.has_valid_outcome: bool = self._has_valid_outcome()
 
     def _get_xpath_from_event(self, xpath) -> str:
         """Parses based on an xpath, returns empty string if absent"""
@@ -58,6 +59,9 @@ class PremisEvent:
             return True
         return False
 
+    def _has_valid_outcome(self):
+        """Check if the outcome of the event was successful"""
+        return self.event_outcome == VALID_OUTCOME
 
 class PremisEvents:
     """Convenience class for XML Premis Events"""

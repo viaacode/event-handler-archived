@@ -6,6 +6,7 @@ from lxml.etree import XMLSyntaxError, fromstring as parse_xml_string
 
 from tests.resources import (
         single_premis_event,
+        single_premis_event_nok,
         multi_premis_event,
         invalid_premis_event,
         invalid_xml_event,
@@ -21,7 +22,19 @@ from app.helpers.events_parser import (
 def test_single_event():
     p = PremisEvents(single_premis_event)
     assert len(p.events) == 1
-    #
+    assert p.events[0].event_id == "111"
+    assert p.events[0].event_detail == "Ionic Defibulizer"
+    assert p.events[0].fragment_id == "a1b2c3"
+    assert p.events[0].event_type == "FLOW.ARCHIVED"
+    assert p.events[0].event_outcome == "OK"
+    assert p.events[0].event_datetime == "2019-03-30T05:28:40Z"
+    assert p.events[0].external_id == "a1"
+    assert p.events[0].is_valid
+    assert p.events[0].has_valid_outcome
+
+def test_single_event_nok():
+    p = PremisEvents(single_premis_event_nok)
+    assert len(p.events) == 1
     assert p.events[0].event_id == "111"
     assert p.events[0].event_detail == "Ionic Defibulizer"
     assert p.events[0].fragment_id == "a1b2c3"
@@ -30,6 +43,7 @@ def test_single_event():
     assert p.events[0].event_datetime == "2019-03-30T05:28:40Z"
     assert p.events[0].external_id == "a1"
     assert p.events[0].is_valid
+    assert not p.events[0].has_valid_outcome
 
 def test_multi_event():
     p = PremisEvents(multi_premis_event)
@@ -41,6 +55,7 @@ def test_multi_event():
     assert p.events[0].event_outcome == "OK"
     assert p.events[0].event_datetime == "2020-03-30T05:28:40Z"
     assert not p.events[0].is_valid
+    assert p.events[0].has_valid_outcome
     assert p.events[1].event_id == "333"
     assert p.events[1].event_detail == "Ionic Defibulizer"
     assert p.events[1].fragment_id == "d4e5f6"
@@ -48,6 +63,7 @@ def test_multi_event():
     assert p.events[1].event_outcome == "OK"
     assert p.events[1].event_datetime == "2019-03-30T05:28:40Z"
     assert p.events[1].is_valid
+    assert p.events[1].has_valid_outcome
     assert p.events[2].event_id == "444"
     assert p.events[2].event_detail == "Ionic Defibulizer 2"
     assert p.events[2].fragment_id == "g7h8j9"
@@ -55,6 +71,7 @@ def test_multi_event():
     assert p.events[2].event_outcome == "OK"
     assert p.events[2].event_datetime == "2019-03-30T05:28:40Z"
     assert p.events[2].is_valid
+    assert p.events[2].has_valid_outcome
 
 def test_invalid_premis_event():
     with pytest.raises(InvalidPremisEventException) as e:
