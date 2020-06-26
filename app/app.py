@@ -26,7 +26,7 @@ log = logging.get_logger(__name__, config=config)
 correlation.initialize(flask=app, logger=log, pika=pika, requests=requests)
 
 
-def get_fragment_metadata(fragment_id: str) -> Dict[str, str]:
+def _get_fragment_metadata(fragment_id: str) -> Dict[str, str]:
     """
     Query MediaHaven for the given fragment ID.
     Return the pid, md5, s3 object key and s3 bucket as a dictionary.
@@ -71,7 +71,7 @@ def get_fragment_metadata(fragment_id: str) -> Dict[str, str]:
     }
 
 
-def generate_vrt_xml(fragment_info: dict, event_timestamp: str) -> str:
+def _generate_vrt_xml(fragment_info: dict, event_timestamp: str) -> str:
     """
     Generates a basic xml for the essenceArchived event.
 
@@ -102,28 +102,6 @@ def generate_vrt_xml(fragment_info: dict, event_timestamp: str) -> str:
     return xml
 
 
-@app.route("/health/live")
-def liveness_check() -> str:
-    return "OK", status.HTTP_200_OK
-
-
-@app.route("/event", methods=["POST"])
-def handle_event() -> str:
-    # Get and parse the incoming event(s)
-    log.debug(request.data)
-    try:
-        premis_events = PremisEvents(request.data)
-    except (XMLSyntaxError, InvalidPremisEventException) as e:
-        log.error(e)
-        return f"NOK: {e}", status.HTTP_400_BAD_REQUEST
-
-    log.debug(f"Events in payload: {len(premis_events.events)}")
-    for event in premis_events.events:
-        _handle_premis_event(event)
-
-    return "OK", status.HTTP_200_OK
-
-
 def _handle_premis_event(event: PremisEvent):
     """Handle a premis event
 
@@ -144,30 +122,55 @@ def _handle_premis_event(event: PremisEvent):
             f"event_type: {event.event_type} / fragment_id: {event.fragment_id} / external_id: {event.external_id}"
         )
     # is_valid means we have a FragmentID and a "(RECORDS).FLOW.ARCHIVED" eventType
-    if event.is_valid:
-        # If the outcome of the premis event is not "OK" it should not process the event
-        if event.has_valid_outcome:
-            fragment_info = get_fragment_metadata(event.fragment_id)
-            if fragment_info:
-                message = generate_vrt_xml(
-                    fragment_info,
-                    event.event_datetime,
-                )
-
-                RabbitService(config=config.config).publish_message(message)
-                log.info(
-                    f"essenceArchivedEvent sent for {event.external_id}.",
-                    mediahaven_event=event.event_type,
-                    fragment_id=event.fragment_id,
-                    pid=event.external_id,
-                    s3_bucket=fragment_info["s3_bucket"],
-                    s3_object_key=fragment_info["s3_object_key"],
-                )
-        else:
-            log.warning(
-                f"Archived event has status: {event.event_outcome} for fragment ID: {event.fragment_id}.",
-                fragment_id=event.fragment_id,
-                pid=event.external_id
-            )
-    else:
+    if not event.is_valid:
         log.debug(f"Dropping event -> ID:{event.event_id}, type:{event.event_type}")
+        return
+
+    # If the outcome of the premis event is not OK it should not process the event
+    if not event.has_valid_outcome:
+        log.warning(
+            f"Archived event has status: {event.event_outcome} for fragment ID: {event.fragment_id}.",
+            fragment_id=event.fragment_id,
+            pid=event.external_id
+        )
+        return
+
+    fragment_info = _get_fragment_metadata(event.fragment_id)
+    if fragment_info:
+        message = _generate_vrt_xml(
+            fragment_info,
+            event.event_datetime,
+        )
+
+        # Send essenceArchivedEvent to the queue
+        RabbitService(config=config.config).publish_message(message)
+        log.info(
+            f"essenceArchivedEvent sent for {event.external_id}.",
+            mediahaven_event=event.event_type,
+            fragment_id=event.fragment_id,
+            pid=event.external_id,
+            s3_bucket=fragment_info["s3_bucket"],
+            s3_object_key=fragment_info["s3_object_key"],
+        )
+
+
+@app.route("/health/live")
+def liveness_check() -> str:
+    return "OK", status.HTTP_200_OK
+
+
+@app.route("/event", methods=["POST"])
+def handle_event() -> str:
+    # Get and parse the incoming event(s)
+    log.debug(request.data)
+    try:
+        premis_events = PremisEvents(request.data)
+    except (XMLSyntaxError, InvalidPremisEventException) as e:
+        log.error(e)
+        return f"NOK: {e}", status.HTTP_400_BAD_REQUEST
+
+    log.debug(f"Events in payload: {len(premis_events.events)}")
+    for event in premis_events.events:
+        _handle_premis_event(event)
+
+    return "OK", status.HTTP_200_OK
