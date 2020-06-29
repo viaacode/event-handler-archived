@@ -17,6 +17,7 @@ from .helpers.events_parser import (
     PremisEvents,
     InvalidPremisEventException
 )
+from .services.s3 import S3Client
 from .services.mediahaven_service import MediahavenService, MediaObjectNotFoundException
 from .services.rabbit_service import RabbitService
 
@@ -142,6 +143,9 @@ def _handle_premis_event(event: PremisEvent):
             event.event_datetime,
         )
 
+        s3_bucket = fragment_info["s3_bucket"]
+        s3_object_key = fragment_info["s3_object_key"]
+
         # Send essenceArchivedEvent to the queue
         RabbitService(config=config.config).publish_message(message)
         log.info(
@@ -149,9 +153,12 @@ def _handle_premis_event(event: PremisEvent):
             mediahaven_event=event.event_type,
             fragment_id=event.fragment_id,
             pid=event.external_id,
-            s3_bucket=fragment_info["s3_bucket"],
-            s3_object_key=fragment_info["s3_object_key"],
+            s3_bucket=s3_bucket,
+            s3_object_key=s3_object_key,
         )
+
+        # Delete the s3 object
+        S3Client(config_dict=config.config).delete_object(s3_bucket, s3_object_key)
 
 
 @app.route("/health/live")

@@ -6,7 +6,6 @@ from io import BytesIO
 from unittest.mock import patch
 import os
 
-import pytest
 from flask_api import status
 from lxml import etree
 from lxml.etree import XMLSyntaxError
@@ -119,13 +118,15 @@ def test_get_fragment_metadata_media_not_found(mhs_mock):
     assert metadata == {}
 
 
+@patch('app.app.S3Client')
 @patch('app.app.RabbitService')
 @patch('app.app._get_fragment_metadata')
 @patch('app.app.request')
 def test_handle_event(
     post_event_mock,
     get_fragment_metadata_mock,
-    rabbit_mock
+    rabbit_mock,
+    s3_client
 ):
     # Mock request.data to return a single premis event
     post_event_mock.data = single_premis_event
@@ -155,7 +156,13 @@ def test_handle_event(
     assert tree.xpath('/m:essenceArchivedEvent/m:timestamp/text()', namespaces=ns)[0] == "2019-03-30T05:28:40Z"
     assert result == ("OK", status.HTTP_200_OK)
 
+    # Check that it deleted the S3 object
+    assert s3_client().delete_object.call_count == 1
+    assert s3_client().delete_object.call_args[0][0] == "s3_bucket"
+    assert s3_client().delete_object.call_args[0][1] == "s3_object_key"
 
+
+@patch('app.app.S3Client')
 @patch('app.app.RabbitService')
 @patch('app.app._get_fragment_metadata')
 @patch('app.app.request')
@@ -163,6 +170,7 @@ def test_handle_event_outcome_nok(
     post_event_mock,
     get_fragment_metadata_mock,
     rabbit_mock,
+    s3_client
 ):
     # Mock request.data to return a single premis event with outcome "NOK"
     post_event_mock.data = single_premis_event_nok
@@ -176,6 +184,9 @@ def test_handle_event_outcome_nok(
     assert rabbit_mock().publish_message.call_count == 0
     # Should still return "200"
     assert result == ("OK", status.HTTP_200_OK)
+
+    # Check that it didn't delete the S3 object
+    assert s3_client().delete_object.call_count == 0
 
 
 @patch('app.app.request')
@@ -198,10 +209,16 @@ def test_handle_event_invalid_premis_event(premis_events_mock, post_event_mock):
     assert result[1] == status.HTTP_400_BAD_REQUEST
 
 
+@patch('app.app.S3Client')
 @patch('app.app.RabbitService')
 @patch('app.app._get_fragment_metadata')
 @patch('app.app.request')
-def test_handle_event_empty_fragment(post_event_mock, get_fragment_metadata_mock, rabbit_mock):
+def test_handle_event_empty_fragment(
+    post_event_mock,
+    get_fragment_metadata_mock,
+    rabbit_mock,
+    s3_client
+):
     # Mock request.data to return a single premis event
     post_event_mock.data = single_premis_event
     # Mock _get_fragment_metadata() to return an empty-dict
@@ -213,3 +230,6 @@ def test_handle_event_empty_fragment(post_event_mock, get_fragment_metadata_mock
     assert rabbit_mock().publish_message.call_count == 0
     # Should still return "200"
     assert result == ("OK", status.HTTP_200_OK)
+
+    # Check that it didn't delete the S3 object
+    assert s3_client().delete_object.call_count == 0
