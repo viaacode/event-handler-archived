@@ -3,7 +3,7 @@
 
 from unittest.mock import patch, MagicMock
 
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, EndpointConnectionError
 import pytest
 
 from app.services.s3 import S3Client
@@ -35,9 +35,10 @@ class TestS3Client:
         assert mock_boto_client.call_args[1]["endpoint_url"] == "host"
 
     def test_delete_object_client_error(self, s3_client, caplog):
-        # Patch delete_object the return an S3 Error
+        # Patch delete_object to return a client error
         mock_boto_client = s3_client.client
-        mock_boto_client.delete_object.side_effect = ClientError(MagicMock(), MagicMock())
+        error = ClientError(MagicMock(), MagicMock())
+        mock_boto_client.delete_object.side_effect = error
 
         bucket = "bucket"
         key = "key"
@@ -45,6 +46,23 @@ class TestS3Client:
 
         assert mock_boto_client.delete_object.call_count == 1
         assert caplog.records[0].levelname == "ERROR"
+        assert caplog.records[0].error == error
+        assert caplog.records[0].s3_bucket == bucket
+        assert caplog.records[0].s3_key == key
+
+    def test_delete_object_endpoint_connection_error(self, s3_client, caplog):
+        # Patch delete_object to return an endpoint connection error
+        mock_boto_client = s3_client.client
+        error = EndpointConnectionError(endpoint_url="endpoint")
+        mock_boto_client.delete_object.side_effect = error
+
+        bucket = "bucket"
+        key = "key"
+        s3_client.delete_object(bucket, key)
+
+        assert mock_boto_client.delete_object.call_count == 1
+        assert caplog.records[0].levelname == "ERROR"
+        assert caplog.records[0].error == error
         assert caplog.records[0].s3_bucket == bucket
         assert caplog.records[0].s3_key == key
 

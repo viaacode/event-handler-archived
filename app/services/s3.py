@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, EndpointConnectionError
 
 from viaa.configuration import ConfigParser
 from viaa.observability import logging
@@ -15,11 +15,12 @@ class S3Client:
     def __init__(self, config_dict: dict = None):
         if not config_dict:
             config_dict = config.config
+        self.host = config_dict["environment"]["s3"]["host"]
         self.client = boto3.client(
             's3',
             aws_access_key_id=config_dict["environment"]["s3"]["aws_access_key_id"],
             aws_secret_access_key=config_dict["environment"]["s3"]["aws_secret_access_key"],
-            endpoint_url=config_dict["environment"]["s3"]["host"]
+            endpoint_url=self.host
         )
 
     def delete_object(self, s3_bucket: str, s3_key: str):
@@ -33,6 +34,13 @@ class S3Client:
         except ClientError as e:
             logger.error(
                 f"Unable to delete s3 object in bucket: {s3_bucket} for key: {s3_key}",
+                error=e,
+                s3_bucket=s3_bucket,
+                s3_key=s3_key
+            )
+        except EndpointConnectionError as e:
+            logger.error(
+                f"Unable to connect to endpoint: {self.host}/{s3_bucket}/{s3_key}",
                 error=e,
                 s3_bucket=s3_bucket,
                 s3_key=s3_key
