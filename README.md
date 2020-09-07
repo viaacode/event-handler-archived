@@ -2,10 +2,15 @@
 
 ## Synopsis
 
-Handles incoming webhooks from Mediahaven. It transforms the incoming events and
-forwards it to a Rabbit queue. It will only accept events of type `"FLOW.ARCHIVED"`.
-It will drop all other types. For more information on configuring RabbitMQ see
-[RabbitMQ](#RabbitMQ).
+Handles incoming webhooks from MediaHaven. It transforms an incoming event into
+an `essenceArchivedEvent` message and forwards it to a Rabbit exchange. It will
+only accept events of type `"FLOW.ARCHIVED"` and `"RECORDS.FLOW.ARCHIVED"`. It
+will drop all other types.
+
+After sending out the transformed event, it will remove the archived file from
+the object store.
+
+For more information on configuring RabbitMQ see [RabbitMQ](#RabbitMQ).
 
 ## Prerequisites
 
