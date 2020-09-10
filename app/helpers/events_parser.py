@@ -63,6 +63,9 @@ class PremisEvent:
         """Check if the outcome of the event was successful"""
         return self.event_outcome == VALID_OUTCOME
 
+    def to_string(self):
+        return etree.tostring(self.xml_element, encoding="UTF-8").decode("UTF-8")
+
 class PremisEvents:
     """Convenience class for XML Premis Events"""
 

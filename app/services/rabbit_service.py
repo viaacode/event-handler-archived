@@ -17,8 +17,6 @@ class RabbitService(object):
         self.name = "RabbitMQ Service"
         self.retrycount = 1
         self.host = config["environment"]["rabbit"]["host"]
-        self.queue = config["environment"]["rabbit"]["queue"]
-        self.exchange = config["environment"]["rabbit"]["exchange"]
         credentials = PlainCredentials(
             config["environment"]["rabbit"]["username"],
             config["environment"]["rabbit"]["password"],
@@ -27,12 +25,14 @@ class RabbitService(object):
             host=self.host, credentials=credentials,
         )
 
-    def publish_message(self, message: str) -> bool:
+    def publish_message(self, message: str, exchange: str, routing_key: str) -> bool:
         """
-        Publishes a message to the queue set in the config.
+        Publishes a message to an exchange with a routing key.
 
         Arguments:
             message {str} -- Message to be posted.
+            exchange {str} -- Exchange to publish to.
+            routing_key {str} -- The routing key.
         """
 
         try:
@@ -44,7 +44,7 @@ class RabbitService(object):
             if self.retrycount <= 10:
                 time.sleep(60 * self.retrycount)
                 self.retrycount = self.retrycount + 1
-                self.publish_message(message)
+                self.publish_message(message, exchange, routing_key)
             else:
                 logger.critical(
                     f"Message will not be delivered, manual publish needed.",
@@ -54,18 +54,9 @@ class RabbitService(object):
 
         channel = connection.channel()
 
-        # Declare queue, exchange and bind the queue to the exchange
-        channel.queue_declare(queue=self.queue, durable=True)
-        channel.exchange_declare(
-            exchange=self.exchange, exchange_type="topic", durable=True
-        )
-        channel.queue_bind(
-            exchange=self.exchange, queue=self.queue, routing_key=self.queue
-        )
-
         channel.basic_publish(
-            exchange=self.exchange,
-            routing_key=self.queue,
+            exchange=exchange,
+            routing_key=routing_key,
             body=message,
             properties=pika.BasicProperties(delivery_mode=2,),
         )
