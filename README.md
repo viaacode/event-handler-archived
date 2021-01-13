@@ -2,7 +2,10 @@
 
 ## Synopsis
 
-Handles incoming webhooks from MediaHaven. The component services two main purposes:
+Handles incoming webhooks from MediaHaven. It transforms an incoming event into
+an `essenceArchivedEvent` message and forwards it to a Rabbit exchange. It will
+only accept events of type `"FLOW.ARCHIVED"`, `"RECORDS.FLOW.ARCHIVED"` and
+`"RECORDS.FLOW.ARCHIVED_ON_TAPE"`. It will drop all other types.
 
 If a premis event has a status outcome that is not "OK" it will send that
 event to an "error" exchange signaling there was an issue during the ingesting process.
