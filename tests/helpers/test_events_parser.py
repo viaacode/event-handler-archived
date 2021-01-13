@@ -10,7 +10,8 @@ from tests.resources import (
         multi_premis_event,
         invalid_premis_event,
         invalid_xml_event,
-        single_event_no_external_id
+        single_event_no_external_id,
+        single_premis_event_archived_on_tape,
 )
 from app.helpers.events_parser import (
     PremisEvent,
@@ -18,14 +19,20 @@ from app.helpers.events_parser import (
     InvalidPremisEventException,
 )
 
-
-def test_single_event():
-    p = PremisEvents(single_premis_event)
+@pytest.mark.parametrize(
+    "resource, event_type",
+    [
+        (single_premis_event, "FLOW.ARCHIVED",),
+        (single_premis_event_archived_on_tape, "RECORDS.FLOW.ARCHIVED_ON_TAPE",),
+    ],
+)
+def test_single_event(resource, event_type):
+    p = PremisEvents(resource)
     assert len(p.events) == 1
     assert p.events[0].event_id == "111"
     assert p.events[0].event_detail == "Ionic Defibulizer"
     assert p.events[0].fragment_id == "a1b2c3"
-    assert p.events[0].event_type == "FLOW.ARCHIVED"
+    assert p.events[0].event_type == event_type
     assert p.events[0].event_outcome == "OK"
     assert p.events[0].event_datetime == "2019-03-30T05:28:40Z"
     assert p.events[0].external_id == "a1"
