@@ -141,7 +141,7 @@ def _handle_premis_event(event: PremisEvent):
         organisation_name = fragment["Administrative"]["OrganisationName"]
 
         # Send a message to an "error" exchange for reporting purposes
-        routing_key = f"NOK.{organisation_name}.{event.event_type}"
+        routing_key = f"NOK.{organisation_name}.{event.event_type}".lower()
         exchange = config.config["environment"]["rabbit"]["exchange_nok"]
         RabbitService(config=config.config).publish_message(event.to_string(), exchange, routing_key)
         return
