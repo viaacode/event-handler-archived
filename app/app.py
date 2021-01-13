@@ -15,7 +15,7 @@ from .helpers.xml_helper import XMLBuilder
 from .helpers.events_parser import (
     PremisEvent,
     PremisEvents,
-    InvalidPremisEventException
+    InvalidPremisEventException,
 )
 from .services.s3 import S3Client
 from .services.mediahaven_service import MediahavenService, MediaObjectNotFoundException
@@ -106,15 +106,21 @@ def _generate_vrt_xml(fragment_info: dict, event_timestamp: str) -> str:
 def _handle_premis_event(event: PremisEvent):
     """Handle a premis event
 
-    A premis event needs to be valid or it will be dropped. Valid means of type archived
-    and the event should have a fragment ID.
+    A premis event should have an outcome that is considered successful. If that
+    is not the case e.g. "NOK", it will send that event to an "error" exchange for
+    reporting reasons.
 
-    The premis event should also have an outcome that is considered successful. If that
-    is not the case e.g. "NOK", then the event should not be processed.
+    In the case of a valid archived event it will be processed further:
 
-    Then we'll query MediaHaven to request more information of the media object. This
+    A valid archived means that the event is of type "(RECORDS.)FLOW.ARCHIVED", has
+    a fragment ID and status outcome is "OK".
+
+    We'll query MediaHaven to request more information of the media object. This
     information will be packaged as an essenceArchivedEvent and be sent on the queue
-    to VRT noticing them the item has been archived successfully.
+    to VRT notifiying them the item has been archived successfully.
+
+    Lastly, it will execute a s3 object-delete so that the archived file will be removed
+    from the object store.
 
     Arguments:
         event {PremisEvent} -- Premis event to handle
@@ -122,6 +128,7 @@ def _handle_premis_event(event: PremisEvent):
     log.debug(
             f"event_type: {event.event_type} / fragment_id: {event.fragment_id} / external_id: {event.external_id}"
         )
+    
     # is_valid means we have a FragmentID and a kind of "archived" event type
     if not event.is_valid:
         log.debug(f"Dropping event -> ID:{event.event_id}, type:{event.event_type}")
@@ -134,6 +141,19 @@ def _handle_premis_event(event: PremisEvent):
             fragment_id=event.fragment_id,
             pid=event.external_id
         )
+        # Get the fragment metadata to find the organisation
+        fragment = MediahavenService(config.config).get_fragment(event.fragment_id)
+        organisation_name = fragment["Administrative"]["OrganisationName"]
+
+        # Send a message to an "error" exchange for reporting purposes
+        routing_key = f"NOK.{organisation_name}.{event.event_type}".lower()
+        exchange = config.config["environment"]["rabbit"]["exchange_nok"]
+        RabbitService(config=config.config).publish_message(event.to_string(), exchange, routing_key)
+        return
+
+    # is_valid means we have a FragmentID and a "(RECORDS.)FLOW.ARCHIVED" eventType
+    if not event.is_valid:
+        log.debug(f"Dropping event -> ID:{event.event_id}, type:{event.event_type}")
         return
 
     fragment_info = _get_fragment_metadata(event.fragment_id)
@@ -147,7 +167,10 @@ def _handle_premis_event(event: PremisEvent):
         s3_object_key = fragment_info["s3_object_key"]
 
         # Send essenceArchivedEvent to the queue
-        RabbitService(config=config.config).publish_message(message)
+        routing_key = config.config["environment"]["rabbit"]["queue"]
+        exchange = config.config["environment"]["rabbit"]["exchange"]
+        RabbitService(config=config.config).publish_message(message, exchange, routing_key)
+
         log.info(
             f"essenceArchivedEvent sent for {event.external_id}.",
             mediahaven_event=event.event_type,

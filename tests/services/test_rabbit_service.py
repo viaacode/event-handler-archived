@@ -32,13 +32,13 @@ class TestRabbitService:
         pika_conn = PikaConnection()
         conn_mock.return_value = pika_conn
 
-        rabbit_service.publish_message('message')
-        exchange = pika_conn.channel_mock.exchanges["exchange"]
-        assert exchange["exchange_type"] == 'topic'
-        assert exchange["durable"]
-        messages = exchange["archived"]
+        rabbit_service.publish_message("message", "exchange", "routing_key")
+        messages = pika_conn.channel_mock.messages
         assert len(messages) == 1
-        assert messages[0] == 'message'
+        message = messages[0]
+        assert message.body == "message"
+        assert message.exchange == "exchange"
+        assert message.routing_key == "routing_key"
 
     @patch('time.sleep')
     @patch('pika.BlockingConnection')
@@ -46,6 +46,6 @@ class TestRabbitService:
         # Creating a pika.BlockedConnection throws Exception
         conn_mock.side_effect = Exception
 
-        rabbit_service.publish_message('message')
+        rabbit_service.publish_message("message", "exchange", "routing_key")
         assert rabbit_service.retrycount == 11
         assert conn_mock.call_count == 11

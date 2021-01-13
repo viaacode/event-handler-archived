@@ -122,7 +122,9 @@ def test_get_fragment_metadata_media_not_found(mhs_mock):
 @patch('app.app.RabbitService')
 @patch('app.app._get_fragment_metadata')
 @patch('app.app.request')
+@patch('app.app.config')
 def test_handle_event(
+    config_mock,
     post_event_mock,
     get_fragment_metadata_mock,
     rabbit_mock,
@@ -142,6 +144,13 @@ def test_handle_event(
     result = handle_event()
 
     # Check if the actual XML message sent to the queue is correct
+    assert rabbit_mock().publish_message.call_count == 1
+    assert rabbit_mock().publish_message.call_args[0][1] == (
+        config_mock.config["environment"]["rabbit"]["exchange"]
+    )
+    assert rabbit_mock().publish_message.call_args[0][2] == (
+        config_mock.config["environment"]["rabbit"]["queue"]
+    )
     xml = rabbit_mock().publish_message.call_args[0][0]
     xsd_file = os.path.join(os.path.dirname(__file__), 'resources', 'essenceArchivedEvent.xsd')
     schema = etree.XMLSchema(file=xsd_file)
@@ -161,16 +170,19 @@ def test_handle_event(
     assert s3_client().delete_object.call_args[0][0] == "s3_bucket"
     assert s3_client().delete_object.call_args[0][1] == "s3_object_key"
 
-
+@patch('app.app.MediahavenService')
 @patch('app.app.S3Client')
 @patch('app.app.RabbitService')
 @patch('app.app._get_fragment_metadata')
 @patch('app.app.request')
+@patch('app.app.config')
 def test_handle_event_outcome_nok(
+    config_mock,
     post_event_mock,
     get_fragment_metadata_mock,
     rabbit_mock,
-    s3_client
+    s3_client,
+    mediahaven_mock
 ):
     # Mock request.data to return a single premis event with outcome "NOK"
     post_event_mock.data = single_premis_event_nok
@@ -178,10 +190,21 @@ def test_handle_event_outcome_nok(
     # Mock _get_fragment_metadata() to return a metadata-dict
     get_fragment_metadata_mock.return_value = {}
 
+    # Mock get_fragment() to return "test" as organisation name
+    mediahaven_mock.return_value.get_fragment.return_value = {"Administrative": {"OrganisationName": "test_org"}}
+    
+
     result = handle_event()
 
-    # Check if there is no message been sent to the queue
-    assert rabbit_mock().publish_message.call_count == 0
+    # Check if there a message send to the "error" exchange
+    assert rabbit_mock().publish_message.call_count == 1
+    assert "NOK" in rabbit_mock().publish_message.call_args[0][0]
+    assert rabbit_mock().publish_message.call_args[0][1] == (
+        config_mock.config["environment"]["rabbit"]["exchange_nok"]
+    )
+    assert rabbit_mock().publish_message.call_args[0][2] == (
+        "NOK.test_org.FLOW.ARCHIVED".lower()
+    )
     # Should still return "200"
     assert result == ("OK", status.HTTP_200_OK)
 
