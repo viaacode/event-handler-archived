@@ -128,11 +128,6 @@ def _handle_premis_event(event: PremisEvent):
     log.debug(
             f"event_type: {event.event_type} / fragment_id: {event.fragment_id} / external_id: {event.external_id}"
         )
-    
-    # is_valid means we have a FragmentID and a kind of "archived" event type
-    if not event.is_valid:
-        log.debug(f"Dropping event -> ID:{event.event_id}, type:{event.event_type}")
-        return
 
     # If the outcome of the premis event is not OK it should not process the event
     if not event.has_valid_outcome:
