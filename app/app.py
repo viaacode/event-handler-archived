@@ -137,8 +137,13 @@ def _handle_premis_event(event: PremisEvent):
             pid=event.external_id
         )
         # Get the fragment metadata to find the organisation
-        fragment = MediahavenService(config.config).get_fragment(event.fragment_id)
-        organisation_name = fragment["Administrative"]["OrganisationName"]
+        try:
+            fragment = MediahavenService(config.config).get_fragment(event.fragment_id)
+            organisation_name = fragment["Administrative"]["OrganisationName"]
+        except MediaObjectNotFoundException as e:
+            log.debug(e, fragment_id=event.fragment_id, pid=event.external_id)
+            organisation_name = "unknown"
+        
 
         # Send a message to an "error" exchange for reporting purposes
         routing_key = f"NOK.{organisation_name}.{event.event_type}".lower()
