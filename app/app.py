@@ -141,7 +141,7 @@ def _handle_premis_event(event: PremisEvent):
             fragment = MediahavenService(config.config).get_fragment(event.fragment_id)
             organisation_name = fragment["Administrative"]["OrganisationName"]
         except MediaObjectNotFoundException as e:
-            log.debug(e, fragment_id=event.fragment_id, pid=event.external_id)
+            log.warning(e, fragment_id=event.fragment_id, pid=event.external_id)
             organisation_name = "unknown"
         
 
