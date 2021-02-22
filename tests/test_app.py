@@ -121,7 +121,7 @@ def test_get_fragment_metadata_media_not_found(mhs_mock):
 @patch('app.app.S3Client')
 @patch('app.app.RabbitService')
 @patch('app.app._get_fragment_metadata')
-@patch('app.app.request')
+@patch('app.app.request', spec={})
 @patch('app.app.config')
 def test_handle_event(
     config_mock,
@@ -174,7 +174,7 @@ def test_handle_event(
 @patch('app.app.S3Client')
 @patch('app.app.RabbitService')
 @patch('app.app._get_fragment_metadata')
-@patch('app.app.request')
+@patch('app.app.request', spec={})
 @patch('app.app.config')
 def test_handle_event_outcome_nok(
     config_mock,
@@ -212,7 +212,7 @@ def test_handle_event_outcome_nok(
     assert s3_client().delete_object.call_count == 0
 
 
-@patch('app.app.request')
+@patch('app.app.request', spec={})
 @patch.object(PremisEvents, '__init__', side_effect=XMLSyntaxError('', 1, 1, 1))
 def test_handle_event_xml_error(premis_events_mock, post_event_mock,):
     # Mock request.data to return irrelevant data
@@ -222,7 +222,7 @@ def test_handle_event_xml_error(premis_events_mock, post_event_mock,):
     assert result[1] == status.HTTP_400_BAD_REQUEST
 
 
-@patch('app.app.request')
+@patch('app.app.request', spec={})
 @patch.object(PremisEvents, '__init__', side_effect=InvalidPremisEventException)
 def test_handle_event_invalid_premis_event(premis_events_mock, post_event_mock):
     # Mock request.data to return irrelevant data
@@ -235,7 +235,7 @@ def test_handle_event_invalid_premis_event(premis_events_mock, post_event_mock):
 @patch('app.app.S3Client')
 @patch('app.app.RabbitService')
 @patch('app.app._get_fragment_metadata')
-@patch('app.app.request')
+@patch('app.app.request', spec={})
 def test_handle_event_empty_fragment(
     post_event_mock,
     get_fragment_metadata_mock,
