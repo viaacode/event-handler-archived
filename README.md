@@ -23,8 +23,6 @@ For more information on configuring RabbitMQ see [RabbitMQ](#RabbitMQ).
 - Git
 - Docker
 - Python 3.6+
-- Linux (if you want to run it locally, uwsgi is not available on other
-  platforms.)
 - Access to the [meemoo PyPi](http://do-prd-mvn-01.do.viaa.be:8081)
 
 ## Usage
@@ -39,7 +37,7 @@ For more information on configuring RabbitMQ see [RabbitMQ](#RabbitMQ).
 
 **Note**: As per the aforementioned requirements, this is a Python3
 application. Check your Python version with `python --version`. You may want to
-substitute the `python` command below with `python3` and if your Python version
+substitute the `python` command below with `python3` if your Python version
 is < 3.
 
 1. Start by creating a virtual environment:
@@ -64,7 +62,7 @@ is < 3.
 
 5. Run the application:
 
-   `$ uwsgi -i uwsgi.ini`
+   `$ python main.py`
 
 The application is now serving requests on `localhost:8080`. Try it with:
 
