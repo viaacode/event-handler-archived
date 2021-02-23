@@ -185,7 +185,7 @@ async def liveness_check() -> str:
     return "OK"
 
 
-@app.post("/event", response_class=PlainTextResponse)
+@app.post("/event", status_code=202, response_class=PlainTextResponse)
 async def handle_event(request: Request, background_tasks: BackgroundTasks) -> str:
     # Get and parse the incoming event(s)
     events_xml: bytes = await request.body()

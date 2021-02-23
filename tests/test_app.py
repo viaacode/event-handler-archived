@@ -162,7 +162,7 @@ def test_handle_event(
     assert tree.xpath('/m:essenceArchivedEvent/m:s3bucket/text()', namespaces=ns)[0] == "s3_bucket"
     assert tree.xpath('/m:essenceArchivedEvent/m:md5sum/text()', namespaces=ns)[0] == "md5"
     assert tree.xpath('/m:essenceArchivedEvent/m:timestamp/text()', namespaces=ns)[0] == "2019-03-30T05:28:40Z"
-    assert result.status_code == 200
+    assert result.status_code == 202
     assert result.text == "OK"
 
     # Check that it deleted the S3 object
@@ -200,8 +200,8 @@ def test_handle_event_outcome_nok(
     assert rabbit_mock().publish_message.call_args[0][2] == (
         "NOK.test_org.FLOW.ARCHIVED".lower()
     )
-    # Should still return "200"
-    assert result.status_code == 200
+    # Should still return "202"
+    assert result.status_code == 202
     assert result.text == "OK"
 
     # Check that it didn't delete the S3 object
@@ -237,8 +237,8 @@ def test_handle_event_empty_fragment(
 
     # Check if there is no message been sent to the queue
     assert rabbit_mock().publish_message.call_count == 0
-    # Should still return "200"
-    assert result.status_code == 200
+    # Should still return "202"
+    assert result.status_code == 202
     assert result.text == "OK"
 
     # Check that it didn't delete the S3 object
