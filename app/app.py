@@ -3,13 +3,11 @@
 
 from typing import Dict
 
-import pika
-import requests
-from flask import Flask, request
-from flask_api import status
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 from lxml.etree import XMLSyntaxError
 from viaa.configuration import ConfigParser
-from viaa.observability import correlation, logging
+from viaa.observability import logging
 
 from .helpers.xml_helper import XMLBuilder
 from .helpers.events_parser import (
@@ -21,10 +19,9 @@ from .services.s3 import S3Client
 from .services.mediahaven_service import MediahavenService, MediaObjectNotFoundException
 from .services.rabbit_service import RabbitService
 
-app = Flask(__name__)
+app = FastAPI()
 config = ConfigParser()
 log = logging.get_logger(__name__, config=config)
-correlation.initialize(flask=app, logger=log, pika=pika, requests=requests)
 
 
 def _get_fragment_metadata(fragment_id: str) -> Dict[str, str]:
@@ -143,7 +140,6 @@ def _handle_premis_event(event: PremisEvent):
         except MediaObjectNotFoundException as e:
             log.warning(e, fragment_id=event.fragment_id, pid=event.external_id)
             organisation_name = "unknown"
-        
 
         # Send a message to an "error" exchange for reporting purposes
         routing_key = f"NOK.{organisation_name}.{event.event_type}".lower()
@@ -184,23 +180,26 @@ def _handle_premis_event(event: PremisEvent):
         S3Client(config_dict=config.config).delete_object(s3_bucket, s3_object_key)
 
 
-@app.route("/health/live")
-def liveness_check() -> str:
-    return "OK", status.HTTP_200_OK
+@app.get("/health/live", response_class=PlainTextResponse)
+async def liveness_check() -> str:
+    return "OK"
 
 
-@app.route("/event", methods=["POST"])
-def handle_event() -> str:
+@app.post("/event", status_code=202)
+async def handle_event(request: Request, background_tasks: BackgroundTasks) -> str:
     # Get and parse the incoming event(s)
-    log.debug(request.data)
+    events_xml: bytes = await request.body()
+    log.debug(events_xml.decode("utf8"))
     try:
-        premis_events = PremisEvents(request.data)
+        premis_events = PremisEvents(events_xml)
     except (XMLSyntaxError, InvalidPremisEventException) as e:
         log.error(e)
-        return f"NOK: {e}", status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=400, detail=f"NOK: {e}")
 
     log.debug(f"Events in payload: {len(premis_events.events)}")
     for event in premis_events.events:
-        _handle_premis_event(event)
+        background_tasks.add_task(_handle_premis_event, event)
 
-    return "OK", status.HTTP_200_OK
+    return {
+        "message": f"Processing {len(premis_events.events)} event(s) in the background."
+    }
