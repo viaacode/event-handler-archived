@@ -1,0 +1,19 @@
+viaa:
+    logging:
+        level: DEBUG
+    environment:
+        mediahaven:
+            host: !ENV ${MEDIAHAVEN_HOST}
+            username: !ENV ${MEDIAHAVEN_USERNAME}
+            password: !ENV ${MEDIAHAVEN_PASSWORD}
+        rabbit:
+            host: !ENV ${RABBITMQ_HOST}
+            exchange: !ENV ${RABBITMQ_EXCHANGE}
+            exchange_nok: !ENV ${RABBITMQ_EXCHANGE_NOK}
+            queue: !ENV ${RABBITMQ_QUEUE}
+            username: !ENV ${RABBITMQ_USERNAME}
+            password: !ENV ${RABBITMQ_PASSWORD}
+        s3:
+            host: !ENV ${S3_HOST}
+            aws_access_key_id: !ENV ${S3_AWS_ACCESS_KEY_ID}
+            aws_secret_access_key: !ENV ${S3_AWS_SECRET_ACCESS_KEY}
