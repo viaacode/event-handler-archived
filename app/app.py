@@ -3,7 +3,7 @@
 
 from typing import Dict
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Request, Depends
 from fastapi.responses import PlainTextResponse
 from lxml.etree import XMLSyntaxError
 from viaa.configuration import ConfigParser
@@ -22,9 +22,9 @@ from .services.rabbit_service import RabbitService
 app = FastAPI()
 config = ConfigParser()
 log = logging.get_logger(__name__, config=config)
+_mediahaven_client: MediahavenService = None
 
-
-def _get_fragment_metadata(fragment_id: str) -> Dict[str, str]:
+def _get_fragment_metadata(fragment_id: str, mh_client: MediahavenService) -> Dict[str, str]:
     """
     Query MediaHaven for the given fragment ID.
     Return the pid, md5, s3 object key and s3 bucket as a dictionary.
@@ -33,14 +33,14 @@ def _get_fragment_metadata(fragment_id: str) -> Dict[str, str]:
 
     Arguments:
         fragment_id {str} -- Fragment ID for which the information is fetched.
+        mh_client {MediahavenService} -- The MH client.
 
     Returns:
         Dict[str, str] -- Dictionary containing the retrieved metadata.
     """
 
-    mediahaven_client = MediahavenService(config.config)
     try:
-        fragment = mediahaven_client.get_fragment(fragment_id)
+        fragment = mh_client.get_fragment(fragment_id)
     except MediaObjectNotFoundException as error:
         log.error(
             f"MediaHaven object not found for ID: {fragment_id}",
@@ -100,7 +100,7 @@ def _generate_vrt_xml(fragment_info: dict, event_timestamp: str) -> str:
     return xml
 
 
-def _handle_premis_event(event: PremisEvent):
+def _handle_premis_event(event: PremisEvent, mh_client: MediahavenService):
     """Handle a premis event
 
     A premis event should have an outcome that is considered successful. If that
@@ -120,7 +120,8 @@ def _handle_premis_event(event: PremisEvent):
     from the object store.
 
     Arguments:
-        event {PremisEvent} -- Premis event to handle
+        event {PremisEvent} -- Premis event to handle.
+        mh_client {MediahavenService} -- The MH client.
     """
     log.debug(
             f"event_type: {event.event_type} / fragment_id: {event.fragment_id} / external_id: {event.external_id}"
@@ -135,7 +136,7 @@ def _handle_premis_event(event: PremisEvent):
         )
         # Get the fragment metadata to find the organisation
         try:
-            fragment = MediahavenService(config.config).get_fragment(event.fragment_id)
+            fragment = mh_client.get_fragment(event.fragment_id)
             organisation_name = fragment["Administrative"]["OrganisationName"]
         except MediaObjectNotFoundException as e:
             log.warning(e, fragment_id=event.fragment_id, pid=event.external_id)
@@ -152,7 +153,7 @@ def _handle_premis_event(event: PremisEvent):
         log.debug(f"Dropping event -> ID:{event.event_id}, type:{event.event_type}")
         return
 
-    fragment_info = _get_fragment_metadata(event.fragment_id)
+    fragment_info = _get_fragment_metadata(event.fragment_id, mh_client)
     if fragment_info:
         message = _generate_vrt_xml(
             fragment_info,
@@ -180,13 +181,25 @@ def _handle_premis_event(event: PremisEvent):
         S3Client(config_dict=config.config).delete_object(s3_bucket, s3_object_key)
 
 
+@app.on_event("startup")
+def create_mediahaven_client():
+    global _mediahaven_client
+    _mediahaven_client = MediahavenService(config.config)
+
+def get_mediahaven_client():
+    return _mediahaven_client
+
 @app.get("/health/live", response_class=PlainTextResponse)
 async def liveness_check() -> str:
     return "OK"
 
 
 @app.post("/event", status_code=202)
-async def handle_event(request: Request, background_tasks: BackgroundTasks) -> str:
+async def handle_event(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    mh_client: MediahavenService = Depends(get_mediahaven_client),
+) -> str:
     # Get and parse the incoming event(s)
     events_xml: bytes = await request.body()
     log.debug(events_xml.decode("utf8"))
@@ -198,7 +211,7 @@ async def handle_event(request: Request, background_tasks: BackgroundTasks) -> s
 
     log.debug(f"Events in payload: {len(premis_events.events)}")
     for event in premis_events.events:
-        background_tasks.add_task(_handle_premis_event, event)
+        background_tasks.add_task(_handle_premis_event, event, mh_client)
 
     return {
         "message": f"Processing {len(premis_events.events)} event(s) in the background."

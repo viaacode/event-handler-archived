@@ -3,7 +3,7 @@
 
 from datetime import datetime
 from io import BytesIO
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import os
 
 from fastapi.testclient import TestClient
@@ -91,8 +91,8 @@ def test_get_fragment_metadata(mhs_mock):
             "Md5": "md5"
         }
     }
-    mhs_mock.return_value.get_fragment.return_value = get_fragment_result
-    metadata = _get_fragment_metadata('fragment_id')
+    mhs_mock.get_fragment.return_value = get_fragment_result
+    metadata = _get_fragment_metadata('fragment_id', mhs_mock)
     assert metadata["pid"] == "pid"
     assert metadata["s3_object_key"] == "s3_object_key"
     assert metadata["s3_bucket"] == "s3_bucket"
@@ -107,18 +107,18 @@ def test_get_fragment_metadata_key_not_found(mhs_mock):
             "ExternalId": "pid"
         }
     }
-    mhs_mock.return_value.get_fragment.return_value = get_fragment_result
+    mhs_mock.get_fragment.return_value = get_fragment_result
 
-    metadata = _get_fragment_metadata('fragment_id')
+    metadata = _get_fragment_metadata('fragment_id', mhs_mock)
     assert metadata == {}
 
 
 @patch('app.app.MediahavenService')
 def test_get_fragment_metadata_media_not_found(mhs_mock):
     # Mock call to MediaHaven to raise A MediaObjectNotFoundException
-    mhs_mock.return_value.get_fragment.side_effect = MediaObjectNotFoundException("denied")
+    mhs_mock.get_fragment.side_effect = MediaObjectNotFoundException("denied")
 
-    metadata = _get_fragment_metadata('fragment_id')
+    metadata = _get_fragment_metadata('fragment_id', mhs_mock)
     assert metadata == {}
 
 
@@ -174,22 +174,19 @@ def test_handle_event(
 @patch('app.app.MediahavenService')
 @patch('app.app.S3Client')
 @patch('app.app.RabbitService')
-@patch('app.app._get_fragment_metadata')
 @patch('app.app.config')
 def test_handle_event_outcome_nok(
     config_mock,
-    get_fragment_metadata_mock,
     rabbit_mock,
     s3_client,
     mediahaven_mock
 ):
-    # Mock _get_fragment_metadata() to return a metadata-dict
-    get_fragment_metadata_mock.return_value = {}
 
     # Mock get_fragment() to return "test" as organisation name
     mediahaven_mock.return_value.get_fragment.return_value = {"Administrative": {"OrganisationName": "test_org"}}
 
-    result = client.post("/event", data=single_premis_event_nok)
+    with TestClient(app) as mh_client:
+        result = mh_client.post("/event", data=single_premis_event_nok)
 
     # Check if there a message send to the "error" exchange
     assert rabbit_mock().publish_message.call_count == 1
@@ -243,3 +240,25 @@ def test_handle_event_empty_fragment(
 
     # Check that it didn't delete the S3 object
     assert s3_client().delete_object.call_count == 0
+
+@patch('app.app.MediahavenService')
+@patch('app.app.PremisEvents')
+@patch('app.app._handle_premis_event')
+def test_handle_event_init_client(
+    handle_premis_event_mock,
+    premis_events_mock,
+    mediahaven_mock
+):
+    """Test if mediahaven client gets initialized via dependency injection"""
+    # Mock a premis event
+    premis_event = MagicMock()
+    premis_events_mock().events = [premis_event]
+
+    with TestClient(app) as mh_client:
+        result = mh_client.post("/event", data='')
+
+    # Check if _handle_premis_event got the initialized mediahaven mock as an arg
+    handle_premis_event_mock.assert_called_once_with(
+        premis_event,
+        mediahaven_mock.return_value
+    )
