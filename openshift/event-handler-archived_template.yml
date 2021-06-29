@@ -1,0 +1,156 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  annotations:
+    tags: "web-app"
+  name: "event-handler-archived"
+  labels:
+    app: "event-handler-archived"
+objects:
+  - kind: Service
+    apiVersion: v1
+    metadata:
+      name: "event-handler-archived-${env}"
+      namespace: "vrt-intake"
+      labels:
+        app: "event-handler-archived"
+        app.kubernetes.io/component: "event-handler-archived-${env}"
+        app.kubernetes.io/instance: "event-handler-archived-${env}"
+        app.kubernetes.io/name: "event-handler-archived"
+        app.kubernetes.io/part-of: "event-handler-archived"
+        app.openshift.io/runtime: "event-handler-archived"
+        app.openshift.io/runtime-version: "${env}"
+        env: ${env}
+    spec:
+      ports:
+        - protocol: TCP
+          port: ${{svc_port}}
+          targetPort: ${{svc_port}}
+          name: http
+      selector:
+        app: "event-handler-archived-${env}"
+      clusterIP:
+      type: ClusterIP
+      sessionAffinity: None
+    status:
+      loadBalancer: {}
+  - kind: Deployment
+    apiVersion: apps/v1
+    metadata:
+      annotations:
+        alpha.image.policy.openshift.io/resolve-names: "*"
+        image.openshift.io/triggers: >-
+          [{'from':{'kind':'ImageStreamTag','name':'event-handler-archived:${env}','namespace':'vrt-intake'},'fieldPath':'spec.template.spec.containers[?(@.name==\'event-handler-archived-${env}\')].image','pause':'false'}]
+      name: "event-handler-archived-${env}"
+      namespace: "vrt-intake"
+      labels:
+        app: "event-handler-archived"
+        app.kubernetes.io/component: "event-handler-archived-${env}"
+        app.kubernetes.io/instance: "event-handler-archived-${env}"
+        app.kubernetes.io/name: "event-handler-archived"
+        app.kubernetes.io/part-of: "event-handler-archived"
+        app.openshift.io/runtime: "event-handler-archived"
+        app.openshift.io/runtime-version: ${env}
+        env: ${env}
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: "event-handler-archived-${env}"
+      template:
+        metadata:
+          creationTimestamp: null
+          labels:
+            app: "event-handler-archived-${env}"
+            deploymentconfig: "event-handler-archived-${env}"
+            env: ${env}
+          annotations:
+            openshift.io/generated-by: OpenShiftWebConsole
+        spec:
+          containers:
+            - name: "event-handler-archived-${env}"
+              terminationMessagePath: /dev/termination-log
+              resources:
+                limits:
+                  cpu: '${cpu_limit}m'
+                  memory: '${memory_limit}Mi'
+                requests:
+                  cpu: '${cpu_requested}m'
+                  memory: '${memory_requested}Mi'
+              ports:
+                - containerPort: ${{svc_port}}
+                  protocol: TCP
+              imagePullPolicy: IfNotPresent
+              livenessProbe:
+                httpGet:
+                  path: /health/live
+                  port: 8080
+                initialDelaySeconds: 15
+                periodSeconds: 10
+                successThreshold: 1
+                timeoutSeconds: 1
+                failureThreshold: 3
+              readinessprobe:
+                tcpSocket:
+                  port: 8080
+                initialDelaySeconds: 15
+                periodSeconds: 10
+                successThreshold: 1
+                timeoutSeconds: 1
+                failureThreshold: 3
+              terminationMessagePolicy: File
+              envFrom:
+                - configMapRef:
+                    name: "event-handler-archived-${env}"
+              image: >-
+                image-registry.openshift-image-registry.svc:5000/vrt-intake/event-handler-archived:${env}
+              volumeMounts:
+                - mountPath: /app/config.yml
+                  name: event-handler-archived-${env}-config
+                  subPath: config.yml
+          restartPolicy: Always
+          terminationGracePeriodSeconds: 30
+          dnsPolicy: ClusterFirst
+          securityContext: {}
+          schedulerName: default-scheduler
+          volumes:
+            - configMap:
+                defaultMode: 420
+                name: event-handler-archived-${env}-config
+              name: event-handler-archived-${env}-config
+      strategy:
+        type: RollingUpdate
+        rollingUpdate:
+          maxUnavailable: 25%
+          maxSurge: 25%
+      revisionHistoryLimit: 10
+      progressDeadlineSeconds: 600
+  - kind: ConfigMap
+    apiVersion: v1
+    metadata:
+      name: "event-handler-archived-${env}"
+      namespace: "vrt-intake"
+      labels:
+        app: "event-handler-archived"
+        app.kubernetes.io/component: "event-handler-archived-${env}"
+        app.kubernetes.io/instance: "event-handler-archived-${env}"
+        app.kubernetes.io/name: "event-handler-archived"
+        app.kubernetes.io/part-of: "event-handler-archived"
+        app.openshift.io/runtime: "event-handler-archived"
+        app.openshift.io/runtime-version: ${env}
+        env: ${env}
+    data:
+      key: some_value
+parameters:
+  - name: env
+    value: "env"
+  - name: "memory_requested"
+    value: "128"
+  - name: "memory_limit"
+    value: "328"
+  - name: "cpu_requested"
+    value: "100"
+  - name: "cpu_limit"
+    value: "300"
+  - name: "svc_port"
+    value: "8080"
