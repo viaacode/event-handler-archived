@@ -195,7 +195,7 @@ def test_handle_event_outcome_nok(
         config_mock.config["environment"]["rabbit"]["exchange_nok"]
     )
     assert rabbit_mock().publish_message.call_args[0][2] == (
-        "NOK.test_org.FLOW.ARCHIVED".lower()
+        "NOK.test_org.RECORDS.FLOW.ARCHIVED".lower()
     )
     # Should still return "202"
     assert result.status_code == 202

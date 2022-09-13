@@ -5,7 +5,7 @@
       <premis:eventIdentifierType>MEDIAHAVEN_EVENT</premis:eventIdentifierType>
       <premis:eventIdentifierValue>111</premis:eventIdentifierValue>
     </premis:eventIdentifier>
-    <premis:eventType>RECORDS.FLOW.ARCHIVED</premis:eventType>
+    <premis:eventType>FLOW.ARCHIVED</premis:eventType>
     <premis:eventDateTime>2019-03-30T05:28:40Z</premis:eventDateTime>
     <premis:eventDetail>Ionic Defibulizer</premis:eventDetail>
     <premis:eventOutcomeInformation>
