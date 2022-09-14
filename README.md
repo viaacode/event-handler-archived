@@ -4,17 +4,13 @@
 
 Handles incoming webhooks from MediaHaven. It transforms an incoming event into
 an `essenceArchivedEvent` message and forwards it to a Rabbit exchange. It will
-only accept events of type `"FLOW.ARCHIVED"`, `"RECORDS.FLOW.ARCHIVED"` and
-`"RECORDS.FLOW.ARCHIVED_ON_TAPE"`. It will drop all other types.
+only accept events of type `"RECORDS.FLOW.ARCHIVED"`. It will drop all other types.
+After sending out the transformed event, it will remove the archived file from the
+object store.
 
 If a premis event has a status outcome that is not "OK" it will send that
 event to an "error" exchange signaling there was an issue during the ingesting process.
 This is then used for reporting purposes.
-
-It will transform certain events to an `essenceArchivedEvent` message and forwards
-it to a Rabbit exchange. It will only transform events of type `"FLOW.ARCHIVED"`
-and `"RECORDS.FLOW.ARCHIVED"`. After sending out the transformed event, it will
-remove the archived file from the object store.
 
 For more information on configuring RabbitMQ see [RabbitMQ](#RabbitMQ).
 
