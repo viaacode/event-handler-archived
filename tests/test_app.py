@@ -3,13 +3,14 @@
 
 from datetime import datetime
 from io import BytesIO
+import json
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 import os
 
 from fastapi.testclient import TestClient
 from lxml import etree
 from lxml.etree import XMLSyntaxError
-
 from app.app import (
     _generate_vrt_xml,
     _get_fragment_metadata,
@@ -18,7 +19,7 @@ from app.app import (
 from tests.resources import single_premis_event, single_premis_event_nok
 from app.helpers.events_parser import InvalidPremisEventException, PremisEvents
 from app.services.mediahaven_service import MediaObjectNotFoundException
-
+from mediahaven.mediahaven import MediaHavenException
 # Create a FastAPI test client
 client = TestClient(app)
 
@@ -76,10 +77,11 @@ def test_liveness_check():
     assert response.status_code == 200
     assert response.text == "OK"
 
-
-@patch('app.app.MediahavenService')
-def test_get_fragment_metadata(mhs_mock):
-    get_fragment_result = {
+@patch('app.app.MediaHaven')
+def test_get_fragment_metadata(
+    mh_mock,
+):
+    fragment_metadata = {
         "Administrative": {
             "ExternalId": "pid"
         },
@@ -91,34 +93,37 @@ def test_get_fragment_metadata(mhs_mock):
             "Md5": "md5"
         }
     }
-    mhs_mock.get_fragment.return_value = get_fragment_result
-    metadata = _get_fragment_metadata('fragment_id', mhs_mock)
+    fragment_metadata = json.loads(json.dumps(fragment_metadata), object_hook=lambda d: SimpleNamespace(**d))
+    mh_mock.records.get.return_value = MagicMock(single_result=fragment_metadata) 
+    metadata = _get_fragment_metadata('fragment_id', mh_mock)
     assert metadata["pid"] == "pid"
     assert metadata["s3_object_key"] == "s3_object_key"
     assert metadata["s3_bucket"] == "s3_bucket"
     assert metadata["md5"] == "md5"
 
 
-@patch('app.app.MediahavenService')
-def test_get_fragment_metadata_key_not_found(mhs_mock):
+@patch('app.app.MediaHaven')
+def test_get_fragment_metadata_key_not_found(
+    mh_mock,
+):
     # Mock call to MediaHaven to return insufficient information
-    get_fragment_result = {
+    fragment_metadata = {
         "Administrative": {
             "ExternalId": "pid"
         }
     }
-    mhs_mock.get_fragment.return_value = get_fragment_result
-
-    metadata = _get_fragment_metadata('fragment_id', mhs_mock)
+    fragment_metadata = json.loads(json.dumps(fragment_metadata), object_hook=lambda d: SimpleNamespace(**d))
+    mh_mock.records.get.return_value = MagicMock(single_result=fragment_metadata) 
+    metadata = _get_fragment_metadata('fragment_id', mh_mock)
     assert metadata == {}
 
 
-@patch('app.app.MediahavenService')
-def test_get_fragment_metadata_media_not_found(mhs_mock):
+@patch('app.app.MediaHaven')
+def test_get_fragment_metadata_media_not_found(mh_mock):
     # Mock call to MediaHaven to raise A MediaObjectNotFoundException
-    mhs_mock.get_fragment.side_effect = MediaObjectNotFoundException("denied")
+    mh_mock.records.get.side_effect = MediaHavenException("denied")
 
-    metadata = _get_fragment_metadata('fragment_id', mhs_mock)
+    metadata = _get_fragment_metadata('fragment_id', mh_mock)
     assert metadata == {}
 
 
@@ -171,7 +176,7 @@ def test_handle_event(
     assert s3_client().delete_object.call_args[0][1] == "s3_object_key"
 
 
-@patch('app.app.MediahavenService')
+@patch('app.app.MediaHaven')
 @patch('app.app.S3Client')
 @patch('app.app.RabbitService')
 @patch('app.app.config')
@@ -183,11 +188,15 @@ def test_handle_event_outcome_nok(
 ):
 
     # Mock get_fragment() to return "test" as organisation name
-    mediahaven_mock.return_value.get_fragment.return_value = {"Administrative": {"OrganisationName": "test_org"}}
+    fragment_metadata = {
+        "Administrative": {"OrganisationName": "test_org"}
+    }
+    fragment_metadata = json.loads(json.dumps(fragment_metadata), object_hook=lambda d: SimpleNamespace(**d))
+    mediahaven_mock.return_value.records.get.return_value = MagicMock(single_result=fragment_metadata) 
 
-    with TestClient(app) as mh_client:
-        result = mh_client.post("/event", data=single_premis_event_nok)
-
+    # with TestClient(app) as mh_client:
+    #     result = mh_client.post("/event", data=single_premis_event_nok)
+    result = client.post("/event", data=single_premis_event_nok)
     # Check if there a message send to the "error" exchange
     assert rabbit_mock().publish_message.call_count == 1
     assert "NOK" in rabbit_mock().publish_message.call_args[0][0]
@@ -241,7 +250,7 @@ def test_handle_event_empty_fragment(
     # Check that it didn't delete the S3 object
     assert s3_client().delete_object.call_count == 0
 
-@patch('app.app.MediahavenService')
+@patch('app.app.MediaHaven')
 @patch('app.app.PremisEvents')
 @patch('app.app._handle_premis_event')
 def test_handle_event_init_client(
