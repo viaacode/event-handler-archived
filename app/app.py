@@ -7,7 +7,7 @@ from fastapi import FastAPI, BackgroundTasks, HTTPException, Request, Depends
 from fastapi.responses import PlainTextResponse
 from lxml.etree import XMLSyntaxError
 from mediahaven import MediaHaven
-from mediahaven.mediahaven import MediaHavenException, MediaHavenClient
+from mediahaven.mediahaven import MediaHavenException
 from mediahaven.oauth2 import ROPCGrant, RequestTokenError
 from viaa.configuration import ConfigParser
 from viaa.observability import logging
@@ -44,7 +44,7 @@ def _get_fragment_metadata(fragment_id: str, mh_client: MediaHaven) -> Dict[str,
 
     try:
         fragment = mh_client.records.get(fragment_id)
-    except MediaObjectNotFoundException as error:
+    except MediaHavenException as error:
         log.error(
             f"MediaHaven object not found for ID: {fragment_id}",
             mediahaven_response=f"{error}"
@@ -140,10 +140,8 @@ def _handle_premis_event(event: PremisEvent, mh_client: MediaHaven):
         # Get the fragment metadata to find the organisation
         try:
             fragment = mh_client.records.get(event.fragment_id)
-            # fragment = mh_client.get_fragment(event.fragment_id)
-            # organisation_name = fragment["Administrative"]["OrganisationName"]
             organisation_name = fragment.single_result.Administrative.OrganisationName
-        except MediaObjectNotFoundException as e:
+        except MediaHavenException as e:
             log.warning(e, fragment_id=event.fragment_id, pid=event.external_id)
             organisation_name = "unknown"
 
@@ -189,11 +187,11 @@ def _handle_premis_event(event: PremisEvent, mh_client: MediaHaven):
 @app.on_event("startup")
 def create_mediahaven_client():
     global _mediahaven_client
-    client_id = config["environment"]["mediahaven"]["client_id"]
-    client_secret = config["environment"]["mediahaven"]["password"]
-    user = config["environment"]["mediahaven"]["username"]
-    password = config["environment"]["mediahaven"]["password"]
-    url = config["environment"]["mediahaven"]["host"]
+    client_id = config.config["environment"]["mediahaven"]["client_id"]
+    client_secret = config.config["environment"]["mediahaven"]["client_secret"]
+    user = config.config["environment"]["mediahaven"]["username"]
+    password = config.config["environment"]["mediahaven"]["password"]
+    url = config.config["environment"]["mediahaven"]["host"]
     grant = ROPCGrant(url, client_id, client_secret)
     try:
         grant.request_token(user, password)
