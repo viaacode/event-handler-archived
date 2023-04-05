@@ -3,24 +3,20 @@
 
 from typing import Dict
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Request, Depends
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from lxml.etree import XMLSyntaxError
 from mediahaven import MediaHaven
 from mediahaven.mediahaven import MediaHavenException
-from mediahaven.oauth2 import ROPCGrant, RequestTokenError
+from mediahaven.oauth2 import RequestTokenError, ROPCGrant
 from viaa.configuration import ConfigParser
 from viaa.observability import logging
 
+from .helpers.events_parser import (InvalidPremisEventException, PremisEvent,
+                                    PremisEvents)
 from .helpers.xml_helper import XMLBuilder
-from .helpers.events_parser import (
-    PremisEvent,
-    PremisEvents,
-    InvalidPremisEventException,
-)
-from .services.s3 import S3Client
-# from .services.mediahaven_service import MediahavenService, MediaObjectNotFoundException
 from .services.rabbit_service import RabbitService
+from .services.s3 import S3Client
 
 app = FastAPI()
 config = ConfigParser()
@@ -43,19 +39,25 @@ def _get_fragment_metadata(fragment_id: str, mh_client: MediaHaven) -> Dict[str,
     """
 
     try:
-        fragment = mh_client.records.get(fragment_id)
+        fragment = mh_client.records.get(fragment_id).single_result
     except MediaHavenException as error:
-        log.error(
-            f"MediaHaven object not found for ID: {fragment_id}",
-            mediahaven_response=f"{error}"
-        )
+        if error.status_code == "404":
+            log.error(
+                f"MediaHaven object not found for ID: {fragment_id}",
+                mediahaven_response=f"{error}"
+            )
+        else:
+            log.error(
+                f"MediaHaven object getting failed: {fragment_id}",
+                mediahaven_response=f"{error}"
+            )
         return {}
 
     try:
-        pid: str = fragment.single_result.Administrative.ExternalId
-        s3_object_key: str = fragment.single_result.Dynamic.s3_object_key
-        s3_bucket: str = fragment.single_result.Dynamic.s3_bucket
-        md5: str = fragment.single_result.Technical.Md5
+        pid: str = fragment.Administrative.ExternalId
+        s3_object_key: str = fragment.Dynamic.s3_object_key
+        s3_bucket: str = fragment.Dynamic.s3_bucket
+        md5: str = fragment.Technical.Md5
     except AttributeError as error:
         log.warning(
             f"{error} is not found in the MediaHaven object.",
@@ -110,7 +112,7 @@ def _handle_premis_event(event: PremisEvent, mh_client: MediaHaven):
     is not the case e.g. "NOK", it will send that event to an "error" exchange for
     reporting reasons.
 
-    In the case of a valid archived event it will bep rocessed further:
+    In the case of a valid archived event it will be processed further:
 
     A valid archived means that the event is of type "(RECORDS.)FLOW.ARCHIVED", has
     a fragment ID and status outcome is "OK".
@@ -140,7 +142,7 @@ def _handle_premis_event(event: PremisEvent, mh_client: MediaHaven):
         # Get the fragment metadata to find the organisation
         try:
             fragment = mh_client.records.get(event.fragment_id)
-            organisation_name = fragment.single_result.Administrative.OrganisationName
+            organisation_name = fragment.Administrative.OrganisationName
         except MediaHavenException as e:
             log.warning(e, fragment_id=event.fragment_id, pid=event.external_id)
             organisation_name = "unknown"
@@ -187,11 +189,12 @@ def _handle_premis_event(event: PremisEvent, mh_client: MediaHaven):
 @app.on_event("startup")
 def create_mediahaven_client():
     global _mediahaven_client
-    client_id = config.config["environment"]["mediahaven"]["client_id"]
-    client_secret = config.config["environment"]["mediahaven"]["client_secret"]
-    user = config.config["environment"]["mediahaven"]["username"]
-    password = config.config["environment"]["mediahaven"]["password"]
-    url = config.config["environment"]["mediahaven"]["host"]
+    mediahaven_config = config.config["environment"]["mediahaven"]
+    client_id = mediahaven_config["client_id"]
+    client_secret = mediahaven_config["client_secret"]
+    user = mediahaven_config["username"]
+    password = mediahaven_config["password"]
+    url = mediahaven_config["host"]
     grant = ROPCGrant(url, client_id, client_secret)
     try:
         grant.request_token(user, password)

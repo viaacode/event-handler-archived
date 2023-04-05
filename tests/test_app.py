@@ -1,25 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import json
+import os
 from datetime import datetime
 from io import BytesIO
-import json
 from types import SimpleNamespace
-from unittest.mock import patch, MagicMock
-import os
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 from lxml import etree
 from lxml.etree import XMLSyntaxError
-from app.app import (
-    _generate_vrt_xml,
-    _get_fragment_metadata,
-    app,
-)
-from tests.resources import single_premis_event, single_premis_event_nok
-from app.helpers.events_parser import InvalidPremisEventException, PremisEvents
-from app.services.mediahaven_service import MediaObjectNotFoundException
 from mediahaven.mediahaven import MediaHavenException
+
+from app.app import _generate_vrt_xml, _get_fragment_metadata, app
+from app.helpers.events_parser import InvalidPremisEventException, PremisEvents
+from tests.resources import single_premis_event, single_premis_event_nok
+
 # Create a FastAPI test client
 client = TestClient(app)
 
@@ -194,9 +191,9 @@ def test_handle_event_outcome_nok(
     fragment_metadata = json.loads(json.dumps(fragment_metadata), object_hook=lambda d: SimpleNamespace(**d))
     mediahaven_mock.return_value.records.get.return_value = MagicMock(single_result=fragment_metadata) 
 
-    # with TestClient(app) as mh_client:
-    #     result = mh_client.post("/event", data=single_premis_event_nok)
-    result = client.post("/event", data=single_premis_event_nok)
+    with TestClient(app) as mh_client:
+        result = mh_client.post("/event", data=single_premis_event_nok)
+    # result = client.post("/event", data=single_premis_event_nok)
     # Check if there a message send to the "error" exchange
     assert rabbit_mock().publish_message.call_count == 1
     assert "NOK" in rabbit_mock().publish_message.call_args[0][0]
