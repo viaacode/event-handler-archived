@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import json
 import os
 from datetime import datetime
 from io import BytesIO
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -271,8 +269,13 @@ def test_handle_event_empty_fragment(
 @patch("app.app.PremisEvents")
 @patch("app.app._handle_premis_event")
 @patch("app.app.ROPCGrant")
+@patch("app.app.config.config")
 def test_handle_event_init_client(
-    ropc_grant_mock, handle_premis_event_mock, premis_events_mock, mediahaven_mock
+    config_mock,
+    ropc_grant_mock,
+    handle_premis_event_mock,
+    premis_events_mock,
+    mediahaven_mock,
 ):
     """Test if mediahaven client gets initialized via dependency injection"""
     # Mock a premis event
@@ -280,7 +283,7 @@ def test_handle_event_init_client(
     premis_events_mock().events = [premis_event]
 
     with TestClient(app) as mh_client:
-        result = mh_client.post("/event", data="")
+        mh_client.post("/event", data="")
 
     # Check if _handle_premis_event got the initialized mediahaven mock as an arg
     handle_premis_event_mock.assert_called_once_with(
