@@ -164,7 +164,7 @@ pipeline {
 }
 
 void getImageFromDockerfile() {
-    return 'python:3.10-slim'
+    return 'python:3.10'
 }
 
 void setGitHubBuildStatus(String message, String state) {
