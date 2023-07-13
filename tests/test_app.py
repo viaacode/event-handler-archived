@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from lxml import etree
 from lxml.etree import XMLSyntaxError
 from mediahaven.mediahaven import MediaHavenException
+from mediahaven.mocks.base_resource import MediaHavenSingleObjectJSONMock
 
 from app.app import _generate_vrt_xml, _get_fragment_metadata, app
 from app.helpers.events_parser import InvalidPremisEventException, PremisEvents
@@ -90,8 +91,8 @@ def test_get_fragment_metadata(
             "Md5": "md5"
         }
     }
-    fragment_metadata = json.loads(json.dumps(fragment_metadata), object_hook=lambda d: SimpleNamespace(**d))
-    mh_mock.records.get.return_value = MagicMock(single_result=fragment_metadata) 
+    result = MediaHavenSingleObjectJSONMock(fragment_metadata)
+    mh_mock.records.get.return_value = result
     metadata = _get_fragment_metadata('fragment_id', mh_mock)
     assert metadata["pid"] == "pid"
     assert metadata["s3_object_key"] == "s3_object_key"
@@ -176,9 +177,11 @@ def test_handle_event(
 @patch('app.app.MediaHaven')
 @patch('app.app.S3Client')
 @patch('app.app.RabbitService')
+@patch('app.app.ROPCGrant')
 @patch('app.app.config')
 def test_handle_event_outcome_nok(
     config_mock,
+    ropc_grant_mock,
     rabbit_mock,
     s3_client,
     mediahaven_mock
@@ -188,12 +191,12 @@ def test_handle_event_outcome_nok(
     fragment_metadata = {
         "Administrative": {"OrganisationName": "test_org"}
     }
-    fragment_metadata = json.loads(json.dumps(fragment_metadata), object_hook=lambda d: SimpleNamespace(**d))
-    mediahaven_mock.return_value.records.get.return_value = MagicMock(single_result=fragment_metadata) 
+    result = MediaHavenSingleObjectJSONMock(fragment_metadata)
+    mediahaven_mock().records.get.return_value = result
 
     with TestClient(app) as mh_client:
         result = mh_client.post("/event", data=single_premis_event_nok)
-    # result = client.post("/event", data=single_premis_event_nok)
+
     # Check if there a message send to the "error" exchange
     assert rabbit_mock().publish_message.call_count == 1
     assert "NOK" in rabbit_mock().publish_message.call_args[0][0]
@@ -250,7 +253,9 @@ def test_handle_event_empty_fragment(
 @patch('app.app.MediaHaven')
 @patch('app.app.PremisEvents')
 @patch('app.app._handle_premis_event')
+@patch('app.app.ROPCGrant')
 def test_handle_event_init_client(
+    ropc_grant_mock,
     handle_premis_event_mock,
     premis_events_mock,
     mediahaven_mock
