@@ -3,28 +3,31 @@
 
 from typing import Dict
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Request, Depends
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from lxml.etree import XMLSyntaxError
+from mediahaven import MediaHaven
+from mediahaven.mediahaven import MediaHavenException
+from mediahaven.oauth2 import RequestTokenError, ROPCGrant
 from viaa.configuration import ConfigParser
 from viaa.observability import logging
 
-from .helpers.xml_helper import XMLBuilder
 from .helpers.events_parser import (
+    InvalidPremisEventException,
     PremisEvent,
     PremisEvents,
-    InvalidPremisEventException,
 )
-from .services.s3 import S3Client
-from .services.mediahaven_service import MediahavenService, MediaObjectNotFoundException
+from .helpers.xml_helper import XMLBuilder
 from .services.rabbit_service import RabbitService
+from .services.s3 import S3Client
 
 app = FastAPI()
 config = ConfigParser()
 log = logging.get_logger(__name__, config=config)
-_mediahaven_client: MediahavenService = None
+_mediahaven_client: MediaHaven = None
 
-def _get_fragment_metadata(fragment_id: str, mh_client: MediahavenService) -> Dict[str, str]:
+
+def _get_fragment_metadata(fragment_id: str, mh_client: MediaHaven) -> Dict[str, str]:
     """
     Query MediaHaven for the given fragment ID.
     Return the pid, md5, s3 object key and s3 bucket as a dictionary.
@@ -33,27 +36,33 @@ def _get_fragment_metadata(fragment_id: str, mh_client: MediahavenService) -> Di
 
     Arguments:
         fragment_id {str} -- Fragment ID for which the information is fetched.
-        mh_client {MediahavenService} -- The MH client.
+        mh_client {Mediahaven} -- The MH client.
 
     Returns:
         Dict[str, str] -- Dictionary containing the retrieved metadata.
     """
 
     try:
-        fragment = mh_client.get_fragment(fragment_id)
-    except MediaObjectNotFoundException as error:
-        log.error(
-            f"MediaHaven object not found for ID: {fragment_id}",
-            mediahaven_response=f"{error}"
-        )
+        fragment = mh_client.records.get(fragment_id)
+    except MediaHavenException as error:
+        if error.status_code == "404":
+            log.error(
+                f"MediaHaven object not found for ID: {fragment_id}",
+                mediahaven_response=f"{error}",
+            )
+        else:
+            log.error(
+                f"MediaHaven object getting failed: {fragment_id}",
+                mediahaven_response=f"{error}",
+            )
         return {}
 
     try:
-        pid: str = fragment["Administrative"]["ExternalId"]
-        s3_object_key: str = fragment["Dynamic"]["s3_object_key"]
-        s3_bucket: str = fragment["Dynamic"]["s3_bucket"]
-        md5: str = fragment["Technical"]["Md5"]
-    except KeyError as error:
+        pid: str = fragment.Administrative.ExternalId
+        s3_object_key: str = fragment.Dynamic.s3_object_key
+        s3_bucket: str = fragment.Dynamic.s3_bucket
+        md5: str = fragment.Technical.Md5
+    except AttributeError as error:
         log.warning(
             f"{error} is not found in the MediaHaven object.",
             fragment_id=fragment_id,
@@ -100,7 +109,7 @@ def _generate_vrt_xml(fragment_info: dict, event_timestamp: str) -> str:
     return xml
 
 
-def _handle_premis_event(event: PremisEvent, mh_client: MediahavenService):
+def _handle_premis_event(event: PremisEvent, mh_client: MediaHaven):
     """Handle a premis event
 
     A premis event should have an outcome that is considered successful. If that
@@ -121,31 +130,33 @@ def _handle_premis_event(event: PremisEvent, mh_client: MediahavenService):
 
     Arguments:
         event {PremisEvent} -- Premis event to handle.
-        mh_client {MediahavenService} -- The MH client.
+        mh_client {Mediahaven} -- The MH client.
     """
     log.debug(
-            f"event_type: {event.event_type} / fragment_id: {event.fragment_id} / external_id: {event.external_id}"
-        )
+        f"event_type: {event.event_type} / fragment_id: {event.fragment_id} / external_id: {event.external_id}"
+    )
 
     # If the outcome of the premis event is not OK it should not process the event
     if not event.has_valid_outcome:
         log.warning(
             f"Archived event has status: {event.event_outcome} for fragment ID: {event.fragment_id}.",
             fragment_id=event.fragment_id,
-            pid=event.external_id
+            pid=event.external_id,
         )
         # Get the fragment metadata to find the organisation
         try:
-            fragment = mh_client.get_fragment(event.fragment_id)
-            organisation_name = fragment["Administrative"]["OrganisationName"]
-        except MediaObjectNotFoundException as e:
+            fragment = mh_client.records.get(event.fragment_id)
+            organisation_name = fragment.Administrative.OrganisationName
+        except MediaHavenException as e:
             log.warning(e, fragment_id=event.fragment_id, pid=event.external_id)
             organisation_name = "unknown"
 
         # Send a message to an "error" exchange for reporting purposes
         routing_key = f"NOK.{organisation_name}.{event.event_type}".lower()
         exchange = config.config["environment"]["rabbit"]["exchange_nok"]
-        RabbitService(config=config.config).publish_message(event.to_string(), exchange, routing_key)
+        RabbitService(config=config.config).publish_message(
+            event.to_string(), exchange, routing_key
+        )
         return
 
     # is_valid means we have a FragmentID and a "(RECORDS.)FLOW.ARCHIVED" eventType
@@ -166,7 +177,9 @@ def _handle_premis_event(event: PremisEvent, mh_client: MediahavenService):
         # Send essenceArchivedEvent to the queue
         routing_key = config.config["environment"]["rabbit"]["queue"]
         exchange = config.config["environment"]["rabbit"]["exchange"]
-        RabbitService(config=config.config).publish_message(message, exchange, routing_key)
+        RabbitService(config=config.config).publish_message(
+            message, exchange, routing_key
+        )
 
         log.info(
             f"essenceArchivedEvent sent for {event.external_id}.",
@@ -184,10 +197,24 @@ def _handle_premis_event(event: PremisEvent, mh_client: MediahavenService):
 @app.on_event("startup")
 def create_mediahaven_client():
     global _mediahaven_client
-    _mediahaven_client = MediahavenService(config.config)
+    mediahaven_config = config.config["environment"]["mediahaven"]
+    client_id = mediahaven_config["client_id"]
+    client_secret = mediahaven_config["client_secret"]
+    user = mediahaven_config["username"]
+    password = mediahaven_config["password"]
+    url = mediahaven_config["host"]
+    grant = ROPCGrant(url, client_id, client_secret)
+    try:
+        grant.request_token(user, password)
+    except RequestTokenError as e:
+        log.error(e)
+        raise e
+    _mediahaven_client = MediaHaven(url, grant)
+
 
 def get_mediahaven_client():
     return _mediahaven_client
+
 
 @app.get("/health/live", response_class=PlainTextResponse)
 async def liveness_check() -> str:
@@ -198,7 +225,7 @@ async def liveness_check() -> str:
 async def handle_event(
     request: Request,
     background_tasks: BackgroundTasks,
-    mh_client: MediahavenService = Depends(get_mediahaven_client),
+    mh_client: MediaHaven = Depends(get_mediahaven_client),
 ) -> str:
     # Get and parse the incoming event(s)
     events_xml: bytes = await request.body()
