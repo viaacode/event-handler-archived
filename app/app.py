@@ -43,7 +43,7 @@ def _get_fragment_metadata(fragment_id: str, mh_client: MediaHaven) -> Dict[str,
     """
 
     try:
-        fragment = mh_client.records.get(fragment_id).single_result
+        fragment = mh_client.records.get(fragment_id)
     except MediaHavenException as error:
         if error.status_code == "404":
             log.error(

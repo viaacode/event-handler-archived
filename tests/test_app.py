@@ -116,10 +116,9 @@ def test_get_fragment_metadata_key_not_found(
 ):
     # Mock call to MediaHaven to return insufficient information
     fragment_metadata = {"Administrative": {"ExternalId": "pid"}}
-    fragment_metadata = json.loads(
-        json.dumps(fragment_metadata), object_hook=lambda d: SimpleNamespace(**d)
-    )
-    mh_mock.records.get.return_value = MagicMock(single_result=fragment_metadata)
+    result = MediaHavenSingleObjectJSONMock(fragment_metadata)
+
+    mh_mock.records.get.return_value = result
     metadata = _get_fragment_metadata("fragment_id", mh_mock)
     assert metadata == {}
 
