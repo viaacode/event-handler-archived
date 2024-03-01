@@ -173,22 +173,32 @@ def _handle_premis_event(event: PremisEvent, mh_client: MediaHaven):
 
         s3_bucket = fragment_info["s3_bucket"]
         s3_object_key = fragment_info["s3_object_key"]
+        # If we have a collateral (subtitle): no need for een archivedEvent
+        if s3_bucket == 'mam-collaterals':
+            log.info(
+                f"not sending essenceArchivedEvent for {event.external_id}.",
+                mediahaven_event=event.event_type,
+                fragment_id=event.fragment_id,
+                pid=event.external_id,
+                s3_bucket=s3_bucket,
+                s3_object_key=s3_object_key,
+            )
+        else:
+            # Send essenceArchivedEvent to the queue
+            routing_key = config.config["environment"]["rabbit"]["queue"]
+            exchange = config.config["environment"]["rabbit"]["exchange"]
+            RabbitService(config=config.config).publish_message(
+                message, exchange, routing_key
+            )
 
-        # Send essenceArchivedEvent to the queue
-        routing_key = config.config["environment"]["rabbit"]["queue"]
-        exchange = config.config["environment"]["rabbit"]["exchange"]
-        RabbitService(config=config.config).publish_message(
-            message, exchange, routing_key
-        )
-
-        log.info(
-            f"essenceArchivedEvent sent for {event.external_id}.",
-            mediahaven_event=event.event_type,
-            fragment_id=event.fragment_id,
-            pid=event.external_id,
-            s3_bucket=s3_bucket,
-            s3_object_key=s3_object_key,
-        )
+            log.info(
+                f"essenceArchivedEvent sent for {event.external_id}.",
+                mediahaven_event=event.event_type,
+                fragment_id=event.fragment_id,
+                pid=event.external_id,
+                s3_bucket=s3_bucket,
+                s3_object_key=s3_object_key,
+            )
 
         # Delete the s3 object
         S3Client(config_dict=config.config).delete_object(s3_bucket, s3_object_key)
