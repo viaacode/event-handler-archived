@@ -176,7 +176,7 @@ def _handle_premis_event(event: PremisEvent, mh_client: MediaHaven):
         # If we have a collateral (subtitle): no need for an archivedEvent
         if s3_bucket == 'mam-collaterals':
             log.info(
-                f"not sending essenceArchivedEvent for {event.external_id}.",
+                f"Not sending essenceArchivedEvent for {event.external_id}.",
                 mediahaven_event=event.event_type,
                 fragment_id=event.fragment_id,
                 pid=event.external_id,
