@@ -18,7 +18,7 @@ For more information on configuring RabbitMQ see [RabbitMQ](#RabbitMQ).
 
 - Git
 - Docker
-- Python 3.6+
+- Python 3.10+
 - Access to the [meemoo PyPi](http://do-prd-mvn-01.do.viaa.be:8081)
 
 ## Usage
