@@ -5,7 +5,7 @@ from typing import Dict
 import threading
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, JSONResponse
 from lxml.etree import XMLSyntaxError
 from mediahaven import MediaHaven
 from mediahaven.mediahaven import MediaHavenException
@@ -230,7 +230,7 @@ async def handle_event(
     request: Request,
     background_tasks: BackgroundTasks,
     mh_client: MediaHaven = Depends(get_mediahaven_client),
-) -> str:
+) -> JSONResponse:
     # Get and parse the incoming event(s)
     events_xml: bytes = await request.body()
     log.debug(events_xml.decode("utf8"))
