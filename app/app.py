@@ -2,9 +2,10 @@
 # -*- coding: utf-8 -*-
 
 from typing import Dict
+import threading
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, JSONResponse
 from lxml.etree import XMLSyntaxError
 from mediahaven import MediaHaven
 from mediahaven.mediahaven import MediaHavenException
@@ -25,6 +26,7 @@ app = FastAPI()
 config = ConfigParser()
 log = logging.get_logger(__name__, config=config)
 _mediahaven_client: MediaHaven = None
+mediahaven_lock = threading.Lock()
 
 
 def _get_fragment_metadata(fragment_id: str, mh_client: MediaHaven) -> Dict[str, str]:
@@ -43,7 +45,8 @@ def _get_fragment_metadata(fragment_id: str, mh_client: MediaHaven) -> Dict[str,
     """
 
     try:
-        fragment = mh_client.records.get(fragment_id)
+        with mediahaven_lock:
+            fragment = mh_client.records.get(fragment_id)
     except MediaHavenException as error:
         if error.status_code == "404":
             log.error(
@@ -145,7 +148,8 @@ def _handle_premis_event(event: PremisEvent, mh_client: MediaHaven):
         )
         # Get the fragment metadata to find the organisation
         try:
-            fragment = mh_client.records.get(event.fragment_id)
+            with mediahaven_lock:
+                fragment = mh_client.records.get(event.fragment_id)
             organisation_name = fragment.Administrative.OrganisationName
         except MediaHavenException as e:
             log.warning(e, fragment_id=event.fragment_id, pid=event.external_id)
@@ -236,7 +240,7 @@ async def handle_event(
     request: Request,
     background_tasks: BackgroundTasks,
     mh_client: MediaHaven = Depends(get_mediahaven_client),
-) -> str:
+) -> JSONResponse:
     # Get and parse the incoming event(s)
     events_xml: bytes = await request.body()
     log.debug(events_xml.decode("utf8"))

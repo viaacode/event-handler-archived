@@ -1,9 +1,8 @@
 viaa-chassis==0.1.3
 pytest==7.2.2
 pytest-cov==2.8.1
-pika==1.3.0
-mediahaven==0.4.3
+pika==1.3.2
+mediahaven==0.7.0
 lxml==4.9.3
-fastapi==0.63.0
+fastapi[standard]==0.112.2
 boto3==1.28.4
-uvicorn==0.13.4
