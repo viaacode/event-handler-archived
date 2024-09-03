@@ -1,0 +1,19 @@
+viaa:
+    logging:
+        level: DEBUG
+    environment:
+        mediahaven:
+            host: 
+            username: 
+            password: 
+        rabbit:
+            host: 
+            exchange: 
+            exchange_nok: 
+            queue: 
+            username: 
+            password: 
+        s3:
+            host: 
+            aws_access_key_id: 
+            aws_secret_access_key: 
